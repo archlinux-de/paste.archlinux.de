@@ -16,11 +16,17 @@ class CustomAutoloader{
 
 	public function loader($className)
 	{
-		$path = APPPATH.str_replace('\\', DIRECTORY_SEPARATOR, $className).'.php';
-		if (file_exists($path)) {
-			require $path;
-			return;
+		$base_paths = array(
+			APPPATH,
+			APPPATH."/third_party/mockery/library/",
+		);
+
+		foreach ($base_paths as $base_path) {
+			$path = $base_path.str_replace('\\', DIRECTORY_SEPARATOR, $className).'.php';
+			if (file_exists($path)) {
+				require $path;
+				return;
+			}
 		}
 	}
 }
-?>

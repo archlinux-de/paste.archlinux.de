@@ -9,13 +9,6 @@
 
 class File extends MY_Controller {
 
-	protected $json_enabled_functions = array(
-		"upload_history",
-		"do_upload",
-		"do_delete",
-		"do_multipaste",
-	);
-
 	function __construct()
 	{
 		parent::__construct();
@@ -115,7 +108,7 @@ class File extends MY_Controller {
 
 		default:
 			if ($is_multipaste) {
-				show_error("Invalid action \"".htmlspecialchars($lexer)."\"");
+				throw new \exceptions\UserInputException("file/download/invalid-action", "Invalid action \"".htmlspecialchars($lexer)."\"");
 			}
 			break;
 		}
@@ -166,27 +159,23 @@ class File extends MY_Controller {
 					$this->ddownload->serveFile($file, $filedata["filename"], $filedata["mimetype"]);
 					exit();
 				} else {
-					switch ($filedata["mimetype"]) {
-						// TODO: handle video/audio
-						// TODO: handle more image formats (thumbnails needs to be improved)
-					case "image/jpeg":
-					case "image/png":
-					case "image/gif":
+					$mimetype = $filedata["mimetype"];
+					$base = explode("/", $filedata["mimetype"])[0];
+
+					// TODO: handle video/audio
+					if ($base == "image"
+							|| in_array($mimetype, array("application/pdf"))) {
 						$filedata["tooltip"] = $this->_tooltip_for_image($filedata);
 						$filedata["orientation"] = libraries\Image::get_exif_orientation($file);
 						$this->output_cache->add_merge(
 							array("items" => array($filedata)),
 							'file/fragments/thumbnail'
 						);
-
-						break;
-
-					default:
+					} else {
 						$this->output_cache->add_merge(
 							array("items" => array($filedata)),
 							'file/fragments/uploads_table'
 						);
-						break;
 					}
 					continue;
 				}
@@ -323,12 +312,27 @@ class File extends MY_Controller {
 	private function _tooltip_for_image($filedata)
 	{
 		$filesize = format_bytes($filedata["filesize"]);
-		list($width, $height) = getimagesize($this->mfile->file($filedata["hash"]));
+		$file = $this->mfile->file($filedata["hash"]);
 		$upload_date = date("r", $filedata["date"]);
+
+		$height = 0;
+		$width = 0;
+		try {
+			list($width, $height) = getimagesize($file);
+		} catch (\ErrorException $e) {
+			// likely unsupported filetype
+			// TODO: support more (using identify from imagemagick is likely slow :( )
+		}
 
 		$tooltip  = "${filedata["id"]} - $filesize<br>";
 		$tooltip .= "$upload_date<br>";
-		$tooltip .= "${width}x${height} - ${filedata["mimetype"]}<br>";
+
+
+		if ($height > 0 && $width > 0) {
+			$tooltip .= "${width}x${height} - ${filedata["mimetype"]}<br>";
+		} else {
+			$tooltip .= "${filedata["mimetype"]}<br>";
+		}
 
 		return $tooltip;
 	}
@@ -391,7 +395,7 @@ class File extends MY_Controller {
 				}
 
 				if ($total_size > $this->config->item("tarball_max_size")) {
-					show_error("Tarball too large, refusing to create.");
+					throw new \exceptions\PublicApiException("file/tarball/tarball-filesize-limit", "Tarball too large, refusing to create.");
 				}
 
 				$tmpfile = $archive->begin();
@@ -434,10 +438,8 @@ class File extends MY_Controller {
 		$this->load->view('footer', $this->data);
 	}
 
-	function _show_url($ids, $lexer)
+	private function _prepare_claim($ids, $lexer)
 	{
-		$redirect = false;
-
 		if (!$this->muser->logged_in()) {
 			$this->muser->require_session();
 			// keep the upload but require the user to login
@@ -448,6 +450,13 @@ class File extends MY_Controller {
 			$this->session->set_flashdata("uri", "file/claim_id");
 			$this->muser->require_access("basic");
 		}
+
+	}
+
+	function _show_url($ids, $lexer)
+	{
+		$redirect = false;
+		$this->_prepare_claim($ids, $lexer);
 
 		foreach ($ids as $id) {
 			if ($lexer) {
@@ -468,10 +477,6 @@ class File extends MY_Controller {
 					}
 				}
 			}
-		}
-
-		if (static_storage("response_type") == "json") {
-			return send_json_reply($this->data["urls"]);
 		}
 
 		if (is_cli_client()) {
@@ -565,7 +570,7 @@ class File extends MY_Controller {
 
 		$filedata = $this->mfile->get_filedata($id);
 		if (!$filedata) {
-			show_error("Failed to get file data");
+			throw new \exceptions\ApiException("file/thumbnail/filedata-unavailable", "Failed to get file data");
 		}
 
 		$cache_key = $filedata['hash'].'_thumb_'.$thumb_size;
@@ -575,11 +580,6 @@ class File extends MY_Controller {
 			$img = new libraries\Image($this->mfile->file($filedata["hash"]));
 			$img->makeThumb($thumb_size, $thumb_size);
 			$thumb = $img->get(IMAGETYPE_JPEG);
-
-			if ($thumb === false) {
-				show_error("Failed to generate thumbnail");
-			}
-
 			return $thumb;
 		});
 
@@ -596,14 +596,19 @@ class File extends MY_Controller {
 		$user = $this->muser->get_userid();
 
 		$query = $this->db
-			->select('id, filename, mimetype, date, hash, filesize')
+			->select('id, filename, mimetype, date, hash, filesize, user')
 			->from('files')
-			->where('user', $user)
-			->where_in('mimetype', array('image/jpeg', 'image/png', 'image/gif'))
+			->where('
+				(user = '.$this->db->escape($user).')
+				AND (
+					mimetype LIKE "image%"
+					OR mimetype IN ("application/pdf")
+				)', null, false)
 			->order_by('date', 'desc')
 			->get()->result_array();
 
 		foreach($query as $key => $item) {
+			assert($item["user"] === $user);
 			if (!$this->mfile->valid_id($item["id"])) {
 				unset($query[$key]);
 				continue;
@@ -623,10 +628,7 @@ class File extends MY_Controller {
 	{
 		$this->muser->require_access("apikey");
 
-		$user = $this->muser->get_userid();
-
-		$query = array();
-		$lengths = array();
+		$history = service\files::history($this->muser->get_userid());
 
 		// key: database field name; value: display name
 		$fields = array(
@@ -643,24 +645,25 @@ class File extends MY_Controller {
 			$lengths[$length_key] = mb_strlen($value);
 		}
 
+		foreach ($history["multipaste_items"] as $key => $item) {
+			$size = 0;
+			foreach ($item["items"] as $i) {
+				$size += $history["items"][$i["id"]]["filesize"];
+			}
+
+			$history["items"][] = array(
+				"id" => $item["url_id"],
+				"filename" => count($item["items"])." file(s)",
+				"mimetype" => "",
+				"date" => $item["date"],
+				"hash" => "",
+				"filesize" => $size,
+			);
+		}
+
 		$order = is_cli_client() ? "ASC" : "DESC";
 
-		$items = $this->db->select(implode(',', array_keys($fields)))
-			->from('files')
-			->where('user', $user)
-			->get()->result_array();
-
-		$query = $this->db->query("
-			SELECT m.url_id id, sum(f.filesize) filesize, m.date, '' hash, '' mimetype, concat(count(*), ' file(s)') filename
-			FROM multipaste m
-			JOIN multipaste_file_map mfm ON m.multipaste_id = mfm.multipaste_id
-			JOIN files f ON f.id = mfm.file_url_id
-			WHERE m.user_id = ?
-			GROUP BY m.url_id
-			", array($user))->result_array();
-
-		$items = array_merge($items, $query);
-		uasort($items, function($a, $b) use ($order) {
+		uasort($history["items"], function($a, $b) use ($order) {
 			if ($order == "ASC") {
 				return $a["date"] - $b["date"];
 			} else {
@@ -668,16 +671,12 @@ class File extends MY_Controller {
 			}
 		});
 
-		if (static_storage("response_type") == "json") {
-			return send_json_reply($items);
-		}
-
-		foreach($items as $key => $item) {
-			$items[$key]["filesize"] = format_bytes($item["filesize"]);
+		foreach($history["items"] as $key => $item) {
+			$history["items"][$key]["filesize"] = format_bytes($item["filesize"]);
 			if (is_cli_client()) {
 				// Keep track of longest string to pad plaintext output correctly
 				foreach($fields as $length_key => $value) {
-					$len = mb_strlen($items[$key][$length_key]);
+					$len = mb_strlen($history["items"][$key][$length_key]);
 					if ($len > $lengths[$length_key]) {
 						$lengths[$length_key] = $len;
 					}
@@ -685,19 +684,10 @@ class File extends MY_Controller {
 			}
 		}
 
-		$total_size = $this->db->query("
-			SELECT sum(filesize) sum
-			FROM (
-				SELECT DISTINCT hash, filesize
-				FROM files
-				WHERE user = ?
-			) sub
-			", array($user))->row_array();
-
-		$this->data["items"] = $items;
+		$this->data["items"] = $history["items"];
 		$this->data["lengths"] = $lengths;
 		$this->data["fields"] = $fields;
-		$this->data["total_size"] = format_bytes($total_size["sum"]);
+		$this->data["total_size"] = format_bytes($history["total_size"]);
 
 		$this->load->view('header', $this->data);
 		$this->load->view($this->var->view_dir.'/upload_history', $this->data);
@@ -709,64 +699,12 @@ class File extends MY_Controller {
 		$this->muser->require_access("apikey");
 
 		$ids = $this->input->post("ids");
-		$userid = $this->muser->get_userid();
-		$errors = array();
-		$deleted = array();
-		$deleted_count = 0;
-		$total_count = 0;
 
-		if (!$ids || !is_array($ids)) {
-			show_error("No IDs specified");
-		}
+		$ret = \service\files::delete($ids);
 
-		foreach ($ids as $id) {
-			$total_count++;
-			$next = false;
-
-			foreach (array($this->mfile, $this->mmultipaste) as $model) {
-				if ($model->id_exists($id)) {
-					if ($model->get_owner($id) !== $userid) {
-						$errors[] = array(
-							"id" => $id,
-							"reason" => "wrong owner",
-						);
-						continue;
-					}
-					if ($model->delete_id($id)) {
-						$deleted[] = $id;
-						$deleted_count++;
-						$next = true;
-					} else {
-						$errors[] = array(
-							"id" => $id,
-							"reason" => "unknown error",
-						);
-					}
-				}
-			}
-
-			if ($next) {
-				continue;
-			}
-
-			$errors[] = array(
-				"id" => $id,
-				"reason" => "doesn't exist",
-			);
-		}
-
-		if (static_storage("response_type") == "json") {
-			return send_json_reply(array(
-				"errors" => $errors,
-				"deleted" => $deleted,
-				"total_count" => $total_count,
-				"deleted_count" => $deleted_count,
-			));
-		}
-
-		$this->data["errors"] = $errors;
-		$this->data["deleted_count"] = $deleted_count;
-		$this->data["total_count"] = $total_count;
+		$this->data["errors"] = $ret["errors"];
+		$this->data["deleted_count"] = $ret["deleted_count"];
+		$this->data["total_count"] = $ret["total_count"];
 
 		$this->load->view('header', $this->data);
 		$this->load->view($this->var->view_dir.'/deleted', $this->data);
@@ -778,55 +716,12 @@ class File extends MY_Controller {
 		$this->muser->require_access("apikey");
 
 		$ids = $this->input->post("ids");
-		$errors = array();
-
-		if (!$ids || !is_array($ids)) {
-			show_error("No IDs specified");
-		}
-
-		if (count(array_unique($ids)) != count($ids)) {
-			show_error("Duplicate IDs are not supported");
-		}
-
-		foreach ($ids as $id) {
-			if (!$this->mfile->id_exists($id)) {
-				$errors[] = array(
-					"id" => $id,
-					"reason" => "doesn't exist",
-				);
-			}
-
-			$filedata = $this->mfile->get_filedata($id);
-			if ($filedata["user"] != $this->muser->get_userid()) {
-				$errors[] = array(
-					"id" => $id,
-					"reason" => "not owned by you",
-				);
-			}
-		}
-
-		if (!empty($errors)) {
-			$errorstring = "";
-			foreach ($errors as $error) {
-				$errorstring .= $error["id"]." ".$error["reason"]."<br>\n";
-			}
-			show_error($errorstring);
-		}
-
+		$userid = $this->muser->get_userid();
 		$limits = $this->muser->get_upload_id_limits();
-		$url_id = $this->mmultipaste->new_id($limits[0], $limits[1]);
 
-		$multipaste_id = $this->mmultipaste->get_multipaste_id($url_id);
-		assert($multipaste_id !== false);
+		$ret = \service\files::create_multipaste($ids, $userid, $limits);
 
-		foreach ($ids as $id) {
-			$this->db->insert("multipaste_file_map", array(
-				"file_url_id" => $id,
-				"multipaste_id" => $multipaste_id,
-			));
-		}
-
-		return $this->_show_url(array($url_id), false);
+		return $this->_show_url(array($ret["url_id"]), false);
 	}
 
 	function delete()
@@ -834,7 +729,7 @@ class File extends MY_Controller {
 		$this->muser->require_access("apikey");
 
 		if (!is_cli_client()) {
-			show_error("Not a listed cli client, please use the history to delete uploads.\n", 403);
+			throw new \exceptions\InsufficientPermissionsException("file/delete/unlisted-client", "Not a listed cli client, please use the history to delete uploads");
 		}
 
 		$id = $this->uri->segment(3);
@@ -856,46 +751,99 @@ class File extends MY_Controller {
 			}
 		}
 
-		show_error("Unknown ID '$id'.", 404);
+		throw new \exceptions\NotFoundException("file/delete/unknown-id", "Unknown ID '$id'.", array(
+			"id" => $id,
+		));
 	}
 
-	// Handle pastes
-	// TODO: merge with do_upload and also merge the forms
-	// TODO: add support for multiple textareas (+ view)
-	function do_paste()
+	/**
+	 * Handle submissions from the web form (files and textareas).
+	 */
+	public function do_websubmit()
 	{
-		// stateful clients get a cookie to claim the ID later
-		// don't force them to log in just yet
-		if (!stateful_client()) {
-			$this->muser->require_access();
+		$files = getNormalizedFILES();
+		$contents = $this->input->post("content");
+		$filenames = $this->input->post("filename");
+
+		assert(is_array($filenames));
+		assert(is_array($contents));
+
+		$ids = array();
+		$ids = array_merge($ids, $this->_handle_textarea($contents, $filenames));
+		$ids = array_merge($ids, $this->_handle_files($files));
+
+
+		if (empty($ids)) {
+			throw new \exceptions\UserInputException("file/websubmit/no-input", "You didn't enter any text or upload any files");
 		}
 
-		$content = $this->input->post("content");
-		$filesize = strlen($content);
-		$filename = "stdin";
+		if (count($ids) > 1) {
+			$userid = $this->muser->get_userid();
+			$limits = $this->muser->get_upload_id_limits();
+			$multipaste_id = \service\files::create_multipaste($ids, $userid, $limits)["url_id"];
 
-		if (!$content) {
-			show_error("Nothing was pasted, content is empty.", 400);
+			$ids[] = $multipaste_id;
+			$this->_prepare_claim($ids, false);
+
+			redirect(site_url($multipaste_id)."/");
 		}
 
-		if ($filesize > $this->config->item('upload_max_size')) {
-			show_error("Error while uploading: File too big", 413);
+		$this->_show_url($ids, false);
+	}
+
+	private function _handle_files($files)
+	{
+		$ids = array();
+
+		if (!empty($files)) {
+			$limits = $this->muser->get_upload_id_limits();
+			service\files::verify_uploaded_files($files);
+
+			foreach ($files as $key => $file) {
+				$id = $this->mfile->new_id($limits[0], $limits[1]);
+				service\files::add_uploaded_file($id, $file["tmp_name"], $file["name"]);
+				$ids[] = $id;
+			}
+		}
+
+		return $ids;
+	}
+
+	private function _handle_textarea($contents, $filenames)
+	{
+		$ids = array();
+
+		foreach ($contents as $key => $content) {
+			$filesize = strlen($content);
+
+			if ($filesize == 0) {
+				unset($contents[$key]);
+			}
+
+			if ($filesize > $this->config->item('upload_max_size')) {
+				throw new \exceptions\RequestTooBigException("file/websubmit/request-too-big", "Error while uploading: Paste too big");
+			}
 		}
 
 		$limits = $this->muser->get_upload_id_limits();
-		$id = $this->mfile->new_id($limits[0], $limits[1]);
-		$hash = md5($content);
+		foreach ($contents as $key => $content) {
+			$filename = "stdin";
+			if (isset($filenames[$key]) && $filenames[$key] != "") {
+				$filename = $filenames[$key];
+			}
 
-		$folder = $this->mfile->folder($hash);
-		file_exists($folder) || mkdir ($folder);
-		$file = $this->mfile->file($hash);
+			$id = $this->mfile->new_id($limits[0], $limits[1]);
+			service\files::add_file_data($id, $content, $filename);
+			$ids[] = $id;
+		}
 
-		file_put_contents($file, $content);
-		$this->mfile->add_file($hash, $id, $filename);
-		$this->_show_url(array($id), false);
+		return $ids;
 	}
 
-	// Handles uploaded files
+	/**
+	 * Handles uploaded files
+	 * @Deprecated only used by the cli client
+	 */
 	function do_upload()
 	{
 		// stateful clients get a cookie to claim the ID later
@@ -911,48 +859,11 @@ class File extends MY_Controller {
 
 		$files = getNormalizedFILES();
 
-		if (empty($files)) {
-			show_error("No file was uploaded or unknown error occured.");
-		}
-
-		// Check for errors before doing anything
-		// First error wins and is displayed, these shouldn't happen that often anyway.
-		foreach ($files as $key => $file) {
-			// getNormalizedFILES() removes any file with error == 4
-			if ($file['error'] !== UPLOAD_ERR_OK) {
-				// ERR_OK only for completeness, condition above ignores it
-				$errors = array(
-					UPLOAD_ERR_OK => "There is no error, the file uploaded with success",
-					UPLOAD_ERR_INI_SIZE => "The uploaded file exceeds the upload_max_filesize directive in php.ini",
-					UPLOAD_ERR_FORM_SIZE => "The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form",
-					UPLOAD_ERR_PARTIAL => "The uploaded file was only partially uploaded",
-					UPLOAD_ERR_NO_FILE => "No file was uploaded",
-					UPLOAD_ERR_NO_TMP_DIR => "Missing a temporary folder",
-					UPLOAD_ERR_CANT_WRITE => "Failed to write file to disk",
-					UPLOAD_ERR_EXTENSION => "A PHP extension stopped the file upload",
-				);
-
-				$msg = "Unknown error.";
-
-				if (isset($errors[$file['error']])) {
-					$msg = $errors[$file['error']];
-				} else {
-					$msg = "Unknown error code: ".$file['error'].". Please report a bug.";
-				}
-
-				show_error("Error while uploading: ".$msg, 400);
-			}
-
-			$filesize = filesize($file['tmp_name']);
-			if ($filesize > $this->config->item('upload_max_size')) {
-				show_error("Error while uploading: File too big", 413);
-			}
-		}
+		service\files::verify_uploaded_files($files);
+		$limits = $this->muser->get_upload_id_limits();
 
 		foreach ($files as $key => $file) {
-			$limits = $this->muser->get_upload_id_limits();
 			$id = $this->mfile->new_id($limits[0], $limits[1]);
-			$hash = md5_file($file['tmp_name']);
 
 			// work around a curl bug and allow the client to send the real filename base64 encoded
 			// TODO: this interface currently sets the same filename for every file if you use multiupload
@@ -968,28 +879,13 @@ class File extends MY_Controller {
 
 			$filename = trim($filename, "\r\n\0\t\x0B");
 
-			$folder = $this->mfile->folder($hash);
-			file_exists($folder) || mkdir ($folder);
-			$file_path = $this->mfile->file($hash);
-
-			move_uploaded_file($file['tmp_name'], $file_path);
-			$this->mfile->add_file($hash, $id, $filename);
+			service\files::add_uploaded_file($id, $file["tmp_name"], $filename);
 			$ids[] = $id;
 		}
 
 		if ($multipaste !== false) {
-			$multipaste_url_id = $this->mmultipaste->new_id($limits[0], $limits[1]);
-
-			$multipaste_id = $this->mmultipaste->get_multipaste_id($multipaste_url_id);
-			assert($multipaste_id !== false);
-
-			foreach ($ids as $id) {
-				$this->db->insert("multipaste_file_map", array(
-					"file_url_id" => $id,
-					"multipaste_id" => $multipaste_id,
-				));
-			}
-			$ids[] = $multipaste_url_id;
+			$userid = $this->muser->get_userid();
+			$ids[] = \service\files::create_multipaste($ids, $userid, $limits)["url_id"];
 		}
 
 		$this->_show_url($ids, $extension);
@@ -1002,7 +898,7 @@ class File extends MY_Controller {
 		$last_upload = $this->session->userdata("last_upload");
 
 		if ($last_upload === false) {
-			show_error("Failed to get last upload data");
+			throw new \exceptions\PublicApiException("file/claim_id/last_upload-failed", "Failed to get last upload data, unable to claim uploads");
 		}
 
 		$ids = $last_upload["ids"];
@@ -1011,17 +907,17 @@ class File extends MY_Controller {
 		assert(is_array($ids));
 
 		foreach ($ids as $key => $id) {
-			$filedata = $this->mfile->get_filedata($id);
+			$affected = 0;
+			$affected += $this->mfile->adopt($id);
+			$affected += $this->mmultipaste->adopt($id);
 
-			if ($filedata["user"] != 0) {
+			if ($affected == 0) {
 				$errors[] = $id;
 			}
-
-			$this->mfile->adopt($id);
 		}
 
 		if (!empty($errors)) {
-			show_error("Someone already owns '".implode(", ", $errors)."', can't reassign.");
+			throw new \exceptions\PublicApiException("file/claim_id/failed", "Failed to claim ".implode(", ", $errors)."");
 		}
 
 		$this->session->unset_userdata("last_upload");
@@ -1070,39 +966,34 @@ class File extends MY_Controller {
 			}
 		}
 
-		// 0 age disables age checks
-		if ($this->config->item('upload_max_age') == 0) return;
-
 		$oldest_time = (time() - $this->config->item('upload_max_age'));
 		$oldest_session_time = (time() - $this->config->item("sess_expiration"));
+		$config = array(
+			"upload_max_age" => $this->config->item("upload_max_age"),
+			"small_upload_size" => $this->config->item("small_upload_size"),
+			"sess_expiration" => $this->config->item("sess_expiration"),
+		);
 
-		$small_upload_size = $this->config->item('small_upload_size');
-
-		$query = $this->db->select('hash, id, user')
+		$query = $this->db->select('hash, id, user, date')
 			->from('files')
-			->where('date <', $oldest_time)
-			->or_where('('.$this->db->_protect_identifiers('user').' = 0 AND '
-			             .$this->db->_protect_identifiers('date')." < $oldest_session_time)")
+			->where("user", 0)
+			->where("date <", $oldest_session_time)
 			->get()->result_array();
 
 		foreach($query as $row) {
-			$file = $this->mfile->file($row['hash']);
-			if (!file_exists($file)) {
-				$this->mfile->delete_id($row["id"]);
-				continue;
-			}
+			\service\files::valid_id($row, $config, $this->mfile, time());
+		}
 
-			if ($row["user"] == 0 || filesize($file) > $small_upload_size) {
-				if (filemtime($file) < $oldest_time) {
-					unlink($file);
-					$this->mfile->delete_hash($row["hash"]);
-				} else {
-					$this->mfile->delete_id($row["id"]);
-					if ($this->mfile->stale_hash($row["hash"])) {
-						unlink($file);
-					}
-				}
-			}
+		// 0 age disables age checks
+		if ($this->config->item('upload_max_age') == 0) return;
+
+		$query = $this->db->select('hash, id, user, date')
+			->from('files')
+			->where('date <', $oldest_time)
+			->get()->result_array();
+
+		foreach($query as $row) {
+			\service\files::valid_id($row, $config, $this->mfile, time());
 		}
 	}
 
@@ -1189,7 +1080,7 @@ class File extends MY_Controller {
 			foreach ($query as $key => $item) {
 				$hash = $item["hash"];
 				$filesize = intval(filesize($this->mfile->file($hash)));
-				$mimetype = $this->mfile->mimetype($this->mfile->file($hash));
+				$mimetype = mimetype($this->mfile->file($hash));
 
 				$this->db->where('hash', $hash)
 					->set(array(

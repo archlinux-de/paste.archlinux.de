@@ -126,7 +126,11 @@ $config['subclass_prefix'] = 'MY_';
 | DO NOT CHANGE THIS UNLESS YOU FULLY UNDERSTAND THE REPERCUSSIONS!!
 |
 */
-$config['permitted_uri_chars'] = 'a-z 0-9~%.:_\-';
+if (php_sapi_name() == "cli") {
+	$config['permitted_uri_chars'] = '';
+} else {
+	$config['permitted_uri_chars'] = 'a-z 0-9~%.:_\-';
+}
 
 
 /*
@@ -376,9 +380,12 @@ $config['upload_max_size'] = 256*1024*1024; // 256MiB
 // even if requested to be highlit.
 $config['upload_max_text_size'] = 2*1024*1024; // 2MiB
 
-// Files older than this will be deleted by the cron job.
+// Files older than this will be deleted by the cron job or when accessed.
 // 0 disables deletion.
 $config['upload_max_age'] = 60*60*24*5; // 5 days
+
+// Action keys (invitions, password resets) will be deleted after this time by
+// the cron job.
 $config['actions_max_age'] = 60*60*24*5; // 5 days
 
 // Files smaller than this won't be deleted (even if they are old enough)

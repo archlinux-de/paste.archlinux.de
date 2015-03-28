@@ -40,7 +40,7 @@ class Mfile extends CI_Model {
 			return $id;
 		}
 
-		show_error("Failed to find unused ID after $max_tries tries.");
+		throw new \exceptions\PublicApiException("file/new_id-try-limit", "Failed to find unused ID after $max_tries tries");
 	}
 
 	function id_exists($id)
@@ -93,20 +93,12 @@ class Mfile extends CI_Model {
 		return $this->folder($hash).'/'.$hash;
 	}
 
-	// Return mimetype of file
-	function mimetype($file) {
-		$fileinfo = new finfo(FILEINFO_MIME_TYPE);
-		$mimetype = $fileinfo->file($file);
-
-		return $mimetype;
-	}
-
 	// Add a hash to the DB
 	function add_file($hash, $id, $filename)
 	{
 		$userid = $this->muser->get_userid();
 
-		$mimetype = $this->mimetype($this->file($hash));
+		$mimetype = mimetype($this->file($hash));
 
 		$filesize = filesize($this->file($hash));
 		$this->db->insert("files", array(
@@ -126,7 +118,9 @@ class Mfile extends CI_Model {
 
 		$this->db->set(array('user' => $userid ))
 			->where('id', $id)
+			->where('user', 0)
 			->update('files');
+		return $this->db->affected_rows();
 	}
 
 	// remove old/invalid/broken IDs
@@ -136,36 +130,29 @@ class Mfile extends CI_Model {
 		if (!$filedata) {
 			return false;
 		}
-		$file = $this->file($filedata['hash']);
 
-		if (!file_exists($file)) {
-			$this->delete_hash($filedata["hash"]);
-			return false;
-		}
+		$config = array(
+			"upload_max_age" => $this->config->item("upload_max_age"),
+			"small_upload_size" => $this->config->item("small_upload_size"),
+			"sess_expiration" => $this->config->item("sess_expiration"),
+		);
 
-		// 0 age disables age checks
-		if ($this->config->item('upload_max_age') == 0) return true;
+		return \service\files::valid_id($filedata, $config, $this, time());
+	}
 
-		// small files don't expire
-		if (filesize($file) <= $this->config->item("small_upload_size")) {
-			return true;
-		}
+	public function file_exists($file)
+	{
+		return file_exists($file);
+	}
 
-		// files older than this should be removed
-		$remove_before = (time()-$this->config->item('upload_max_age'));
+	public function filemtime($file)
+	{
+		return filemtime($file);
+	}
 
-		if ($filedata["date"] < $remove_before) {
-			// if the file has been uploaded multiple times the mtime is the time
-			// of the last upload
-			if (filemtime($file) < $remove_before) {
-				$this->delete_hash($filedata["hash"]);
-			} else {
-				$this->delete_id($id);
-			}
-			return false;
-		}
-
-		return true;
+	public function filesize($file)
+	{
+		return filesize($file);
 	}
 
 	public function get_timeout($id)
@@ -338,6 +325,7 @@ class Mfile extends CI_Model {
 		$typearray = array(
 		'application/javascript' => 'javascript',
 		'application/mbox' => 'text',
+		'application/postscript' => 'postscript',
 		'application/smil' => 'ocaml',
 		'application/x-applix-spreadsheet' => 'actionscript',
 		'application/x-awk' => 'awk',
@@ -428,6 +416,7 @@ class Mfile extends CI_Model {
 				'patch' => 'diff',
 				'php' => 'php',
 				'pl' => 'perl',
+				'pp' => 'puppet',
 				'py' => 'python',
 				'rb' => 'ruby',
 				's' => 'asm',

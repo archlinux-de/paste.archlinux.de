@@ -249,17 +249,26 @@ function getExceptionTraceAsString($exception) {
 	return $rtn;
 }
 
+function _log_exception($e)
+{
+	$backtrace = getExceptionTraceAsString($e);
+	$log_heading = sprintf("Exception '%s' with message '%s' in %s:%d", get_class($e), $e->getMessage(), $e->getFile(), $e->getLine());
+	error_log($log_heading."\n".$backtrace);
+}
+
 // The actual exception handler
 function _actual_exception_handler($e)
 {
+	_log_exception($e);
+
 	$display_errors = in_array(strtolower(ini_get('display_errors')), array('1', 'on', 'true', 'stdout'));
 
 	$GLOBALS["is_error_page"] = true;
 	$heading = "Internal Server Error";
 	$message = "<p>An unhandled error occured.</p>\n";
 
-	$backtrace = getExceptionTraceAsString($e);
 	if ($display_errors) {
+		$backtrace = getExceptionTraceAsString($e);
 		$message .= '<div>';
 		$message .= '<b>Fatal error</b>:  Uncaught exception '.get_class($e).'<br>';
 		$message .= '<b>Message</b>: '.$e->getMessage().'<br>';
@@ -269,9 +278,6 @@ function _actual_exception_handler($e)
 	} else {
 		$message .="<p>More information can be found in syslog or by enabling display_errors.</p>";
 	}
-
-	$log_heading = sprintf("Exception '%s' with message '%s' in %s:%d", get_class($e), $e->getMessage(), $e->getFile(), $e->getLine());
-	error_log($log_heading."\n".$backtrace);
 
 	$message = "$message";
 	include APPPATH."/errors/error_general.php";
@@ -291,6 +297,14 @@ function check_for_fatal()
 }
 register_shutdown_function("check_for_fatal");
 
+function _assert_failure($file, $line, $expr, $message = "")
+{
+	_actual_exception_handler(new Exception("assert($expr): Assertion failed in $file at line $line".($message != "" ? " with message: '$message'" : "")));
+	exit(1);
+}
+
+assert_options(ASSERT_ACTIVE,   true);
+assert_options(ASSERT_CALLBACK, '_assert_failure');
 /*
  * --------------------------------------------------------------------
  * LOAD THE BOOTSTRAP FILE
@@ -299,7 +313,13 @@ register_shutdown_function("check_for_fatal");
  * And away we go...
  *
  */
-require_once BASEPATH.'core/CodeIgniter.php';
+try {
+	require_once BASEPATH.'core/CodeIgniter.php';
+} catch (\exceptions\NotAuthenticatedException $e) {
+	redirect("user/login");
+} catch (\exceptions\PublicApiException $e) {
+	show_error(nl2br(htmlspecialchars($e->__toString())), $e->get_http_error_code());
+}
 
 /* End of file index.php */
 /* Location: ./index.php */
