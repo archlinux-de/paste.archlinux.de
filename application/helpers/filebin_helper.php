@@ -282,8 +282,25 @@ function stateful_client()
 	return true;
 }
 
+function init_cache()
+{
+	static $done = false;
+	if ($done) {return;}
+
+	$CI =& get_instance();
+	$CI->load->driver('cache', array('adapter' => $CI->config->item("cache_backend")));
+	$done = true;
+}
+
+function delete_cache($key)
+{
+	init_cache();
+	$CI =& get_instance();
+	$CI->cache->delete($key);
+}
+
 /**
- * Cache the result of the function call
+ * Cache the result of the function call in the cache backend.
  * @param key cache key to use
  * @param ttl time to live for the cache entry
  * @param function function to call
@@ -291,13 +308,30 @@ function stateful_client()
  */
 function cache_function($key, $ttl, $function)
 {
+	init_cache();
 	$CI =& get_instance();
-	$CI->load->driver('cache', array('adapter' => $CI->config->item("cache_backend")));
 	if (! $content = $CI->cache->get($key)) {
 		$content = $function();
 		$CI->cache->save($key, $content, $ttl);
 	}
 	return $content;
+}
+
+/**
+ * Cache the result of a function call in the cache backend and in the memory of this process.
+ * @param key cache key to use
+ * @param ttl time to live for the cache entry
+ * @param function function to call
+ * @return return value of function (will be cached)
+ */
+function cache_function_full($key, $ttl, $function) {
+	$local_key = 'cache_function-'.$key;
+	if (static_storage($local_key) !== null) {
+		return static_storage($local_key);
+	}
+	$ret = cache_function($key, $ttl, $function);
+	static_storage($local_key, $ret);
+	return $ret;
 }
 
 // Return mimetype of file
