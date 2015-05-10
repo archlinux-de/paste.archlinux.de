@@ -5,12 +5,12 @@
 				<li><a href="<?=site_url($id)."/"; ?>" class="navbar-brand" data-toggle="modal"><?php echo $title ?></a></li>
 				<li class="divider"></li>
 				<li class="dropdown">
-					<a href="#" class="dropdown-toggle" data-toggle="dropdown" id="language-toggle-<?=$id; ?>">
+					<a href="#" class="dropdown-toggle lexer-toggle" data-toggle="dropdown">
 						Language: <?php echo htmlspecialchars($current_highlight); ?>
 						<b class="caret"></b>
 					</a>
 					<div class="dropdown-menu" style="padding: 15px;">
-						<form>
+						<form class="lexer-form">
 						<input data-base-url="<?=site_url($id); ?>" type="text" id="language-<?=$id; ?>" placeholder="Language" class="form-control">
 						</form>
 					</div>
@@ -25,7 +25,15 @@
 				<?php } ?>
 			</ul>
 			<div class="btn-group navbar-right" style="margin: 8px;">
-				<a id="linewrap-<?=$id; ?>" class="btn btn-default" rel="tooltip" title="Toggle wrapping of long lines">Linewrap</a>
+				<a class="btn btn-default linewrap-toggle" rel="tooltip" title="Toggle wrapping of long lines">Linewrap</a>
+				<div class="btn-group">
+					<a class="btn btn-default dropdown-toggle tabwidth-toggle" rel="tooltip" title="Set tab width in spaces" data-toggle="dropdown" href="#">Tab width: <span class="tabwidth-value"></span> <span class="caret"></span></a>
+					<div class="dropdown-menu tabwidth-dropdown">
+						<form class="tabwidth-form">
+							<input type="number" class="form-control" min="0">
+						</form>
+					</div>
+				</div>
 				<a href="<?php echo site_url($id."/plain") ?>" class="btn btn-default" rel="tooltip" title="View as plain text">Plain</a>
 				<a href="<?php echo site_url($id) ?>" class="btn btn-default" rel="tooltip" title="View as raw file (org. mime type)">Raw</a>
 				<?php if ($current_highlight === 'rmd') { ?>

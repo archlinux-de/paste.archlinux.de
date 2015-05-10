@@ -3,10 +3,9 @@ $force_full_html = true;
 include(FCPATH."application/views/header.php"); ?>
 
 </div><!-- .container -->
-
 <script type="text/javascript">
 	/* <![CDATA[ */
-	window.lexers = <?php echo json_encode($lexers); ?>;
+	window.appConfig.lexers = <?php echo json_encode($lexers); ?>;
 	/* ]]> */
 </script>
 

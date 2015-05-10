@@ -26,6 +26,20 @@ if (is_cli_client() && !isset($force_full_html)) {
 			echo '<link href="'.link_with_mtime("/data/local/favicon.png").'" rel="shortcut icon">';
 		}
 	?>
+	<script src="<?php echo link_with_mtime("/data/js/vendor/require.js"); ?>"></script>
+	<script type="text/javascript">
+		/* <![CDATA[ */
+		window.appConfig = {};
+		require.config({
+			baseUrl: '/data/js',
+			urlArgs: '<?php echo js_cache_buster(); ?>',
+			paths: {
+				'main': ['main.min', 'main']
+			}
+		});
+		require(['main']);
+		/* ]]> */
+	</script>
 </head>
 
 <body>

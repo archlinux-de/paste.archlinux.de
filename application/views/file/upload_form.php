@@ -70,8 +70,8 @@
 
 <script type="text/javascript">
     /* <![CDATA[ */
-	var max_upload_size = "<?php echo $max_upload_size; ?>";
-	var max_files_per_upload = "<?php echo ini_get("max_file_uploads"); ?>";
+	window.appConfig.maxUploadSize = "<?php echo $max_upload_size; ?>";
+	window.appConfig.maxFilesPerUpload = "<?php echo ini_get("max_file_uploads"); ?>";
     /* ]]> */
 </script>
 
@@ -100,8 +100,9 @@
 			<dt>/&lt;ID&gt;/rmd</dt><dd>convert markdown to HTML</dd>
 			<dt>/&lt;ID&gt;/ascii</dt><dd>convert text with ANSI (shell) escape codes to HTML</dd>
 			<dt>/&lt;ID&gt;/info</dt><dd>display some information about the ID</dd>
+			<dt>/file/thumbnail/&lt;ID&gt;</dt><dd>return a JPEG thumbnail for the ID (only work for some file types)</dd>
 		</dl>
-		<p>If your upload is not detected as text, only <b>/&lt;ID&gt;/qr</b>, <b>/&lt;ID&gt;/plain</b> and <b>/&lt;ID&gt;/info</b> will work as above and all others will simply return the file with the detected MIME type.</p>
+		<p>If your upload is not detected as text, only <b>/&lt;ID&gt;/qr</b>, <b>/&lt;ID&gt;/plain</b>, <b>/&lt;ID&gt;/info</b> and <b>/file/thumbnail/&lt;ID&gt;</b> will work as above and all others will simply return the file with the detected MIME type.</p>
 		<h3>How to link your multipastes:</h3>
 		<p>Multipaste IDs begin with <code>m-</code> and only support the following features.</p>
 		<dl class="dl-horizontal">

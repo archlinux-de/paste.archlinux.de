@@ -135,28 +135,10 @@ function link_with_mtime($file)
 	return $link;
 }
 
-function include_js($file)
+function js_cache_buster()
 {
-	static $included = array();
-	if (in_array($file, $included) || $file === null) {
-		return "";
-	}
-	return "<script src=\"".link_with_mtime($file)."\"></script>\n";
-}
-
-// kind of hacky, but works well enough for now
-function register_js_include($file, $return = false)
-{
-	static $list = "";
-	$list .= include_js($file);
-	if ($return) {
-		return $list;
-	}
-}
-
-function include_registered_js()
-{
-	return register_js_include(null, true);
+	$minified_main = FCPATH.'/data/js/main.min.js';
+	return file_exists($minified_main) ? filemtime($minified_main) : time();
 }
 
 function handle_etag($etag)
