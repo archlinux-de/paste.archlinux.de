@@ -7,9 +7,9 @@
  *
  */
 
-namespace tests;
+namespace test\tests;
 
-class test_api_v1 extends Test {
+class test_api_v1 extends \test\Test {
 
 	public function __construct()
 	{
@@ -245,6 +245,25 @@ class test_api_v1 extends Test {
 		$this->t->ok(!empty($ret["data"]["urls"]), "got URLs");
 	}
 
+	public function test_upload_uploadFileSameMD5()
+	{
+		$apikey = $this->createUserAndApikey();
+		$ret = $this->CallEndpoint("POST", "file/upload", array(
+			"apikey" => $apikey,
+			"file[1]" => curl_file_create("data/tests/message1.bin"),
+			"file[2]" => curl_file_create("data/tests/message2.bin"),
+		));
+		$this->expectSuccess("upload file", $ret);
+
+		$this->t->ok(!empty($ret["data"]["ids"]), "got IDs");
+		$this->t->ok(!empty($ret["data"]["urls"]), "got URLs");
+
+		foreach ($ret["data"]["urls"] as $url) {
+			$data[] = $this->SendHTTPRequest("GET", $url, '');
+		}
+		$this->t->ok($data[0] !== $data[1], 'Returned file contents should differ');
+	}
+
 	public function test_upload_uploadNothing()
 	{
 		$apikey = $this->createUserAndApikey();
@@ -257,6 +276,26 @@ class test_api_v1 extends Test {
 			'error_id' => 'file/no-file',
 			'message' => 'No file was uploaded or unknown error occurred.',
 		), $ret, "expected reply");
+	}
+
+	public function test_history_notEmptyAfterUploadSameMD5()
+	{
+		$apikey = $this->createUserAndApikey();
+		$this->CallEndpoint("POST", "file/upload", array(
+			"apikey" => $apikey,
+			"file[1]" => curl_file_create("data/tests/message1.bin"),
+			"file[2]" => curl_file_create("data/tests/message2.bin"),
+		));
+		$expected_filesize = filesize("data/tests/message1.bin") + filesize("data/tests/message2.bin");
+
+		$ret = $this->CallEndpoint("POST", "file/history", array(
+			"apikey" => $apikey,
+		));
+		$this->expectSuccess("history not empty after upload", $ret);
+
+		$this->t->ok(!empty($ret["data"]["items"]), "history not empty after upload (items)");
+		$this->t->ok(empty($ret["data"]["multipaste_items"]), "didn't upload multipaste");
+		$this->t->is($ret["data"]["total_size"], $expected_filesize, "total_size == uploaded files");
 	}
 
 	public function test_history_notEmptyAfterUpload()

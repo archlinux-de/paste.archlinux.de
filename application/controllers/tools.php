@@ -43,14 +43,14 @@ class Tools extends MY_Controller {
 		}
 	}
 
-	function drop_all_tables_using_prefix()
+	function drop_all_tables()
 	{
 		$tables = $this->db->list_tables();
 		$prefix = $this->db->dbprefix;
 		$tables_to_drop = array();
 
 		foreach ($tables as $table) {
-			if (strpos($table, $prefix) === 0) {
+			if ($prefix === "" || strpos($table, $prefix) === 0) {
 				$tables_to_drop[] = $this->db->protect_identifiers($table);
 			}
 		}
@@ -70,8 +70,11 @@ class Tools extends MY_Controller {
 		$url = $argv[3];
 		$testcase = $argv[4];
 
-		$testclass = '\tests\\'.$testcase;
-		$test = new $testclass();
+		$testcase = str_replace("application/", "", $testcase);
+		$testcase = str_replace("/", "\\", $testcase);
+		$testcase = str_replace(".php", "", $testcase);
+
+		$test = new $testcase();
 		$test->setServer($url);
 
 		$exitcode = 0;
@@ -85,7 +88,7 @@ class Tools extends MY_Controller {
 					$test->{$method->name}();
 					$test->cleanup();
 				} catch (\Exception $e) {
-					echo "not ok - uncaught exception in $testcase->$method->name\n";
+					echo "not ok - uncaught exception in {$testcase}->{$method->name}\n";
 					_actual_exception_handler($e);
 					$exitcode = 255;
 				}

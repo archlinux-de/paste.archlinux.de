@@ -137,8 +137,26 @@ function link_with_mtime($file)
 
 function js_cache_buster()
 {
-	$minified_main = FCPATH.'/data/js/main.min.js';
-	return file_exists($minified_main) ? filemtime($minified_main) : time();
+	$jsdir = FCPATH.'/data/js';
+	$minified_main = $jsdir.'/main.min.js';
+	if (file_exists($minified_main)) {
+		return filemtime($minified_main);
+	}
+
+	$ret = 0;
+
+	$it = new RecursiveIteratorIterator(
+		new RecursiveDirectoryIterator($jsdir), RecursiveIteratorIterator::SELF_FIRST);
+
+	foreach ($it as $file) {
+		$mtime = $file->getMTime();
+		if ($file->isFile()) {
+			if ($mtime > $ret) {
+				$ret = $mtime;
+			}
+		}
+	}
+	return $ret;
 }
 
 function handle_etag($etag)
@@ -322,6 +340,33 @@ function mimetype($file) {
 	$mimetype = $fileinfo->file($file);
 
 	return $mimetype;
+}
+
+function files_are_equal($a, $b)
+{
+	$chunk_size = 8*1024;
+
+	// Check if filesize is different
+	if (filesize($a) !== filesize($b)) {
+		return false;
+	}
+
+	// Check if content is different
+	$ah = fopen($a, 'rb');
+	$bh = fopen($b, 'rb');
+
+	$result = true;
+	while (!feof($ah) && !feof($bh)) {
+		if (fread($ah, $chunk_size) !== fread($bh, $chunk_size)) {
+			$result = false;
+			break;
+		}
+	}
+
+	fclose($ah);
+	fclose($bh);
+
+	return $result;
 }
 
 # vim: set noet:
