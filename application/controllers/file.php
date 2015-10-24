@@ -141,6 +141,11 @@ class File extends MY_Controller {
 				return $this->_tarball($id);
 			}
 
+		case "pls":
+			if ($is_multipaste) {
+				return $this->_generate_playlist($id);
+			}
+
 		default:
 			if ($is_multipaste) {
 				throw new \exceptions\UserInputException("file/download/invalid-action", "Invalid action \"".htmlspecialchars($lexer)."\"");
@@ -198,7 +203,6 @@ class File extends MY_Controller {
 					$mimetype = $filedata["mimetype"];
 					$base = explode("/", $filedata["mimetype"])[0];
 
-					// TODO: handle video/audio
 					if (\libraries\Image::type_supported($mimetype)) {
 						$filedata["tooltip"] = $this->_tooltip_for_image($filedata);
 						$filedata["orientation"] = libraries\Image::get_exif_orientation($file);
@@ -206,6 +210,10 @@ class File extends MY_Controller {
 							array("items" => array($filedata)),
 							'file/fragments/thumbnail'
 						);
+					} else if ($base == "audio") {
+						$this->output_cache->add(array("filedata" => $filedata), "file/fragments/audio-player");
+					} else if ($base == "video") {
+						$this->output_cache->add(array("filedata" => $filedata), "file/fragments/video-player");
 					} else {
 						$this->output_cache->add_merge(
 							array("items" => array($filedata)),
@@ -252,7 +260,6 @@ class File extends MY_Controller {
 		} else {
 			// TODO: use exec safe and catch exception
 			$ret = (new \libraries\ProcRunner(array('pygmentize', '-F', 'codetagify', '-O', 'encoding=guess,outencoding=utf8,stripnl=False', '-l', $lexer, '-f', 'html', $file)))
-				->forbid_stderr()
 				->exec();
 			// Last 2 items are "</pre></div>" and ""
 			$lines_to_remove = 2;
@@ -469,6 +476,32 @@ class File extends MY_Controller {
 		}
 	}
 
+	/**
+	 * Generate a PLS v2 playlist
+	 */
+	private function _generate_playlist($id)
+	{
+		$files = $this->mmultipaste->get_files($id);
+		$counter = 1;
+
+		$playlist = "[playlist]\n";
+		foreach ($files as $file) {
+			// only add audio/video files
+			$base = explode("/", $file['mimetype'])[0];
+			if (!($base === "audio" || $base === "video")) {
+				continue;
+			}
+
+			$url = site_url($file["id"]);
+			$playlist .= sprintf("File%d=%s\n", $counter++, $url);
+		}
+		$playlist .= sprintf("NumberOfEntries=%d\n", $counter - 1);
+		$playlist .= "Version=2\n";
+
+		$this->output->set_content_type('audio/x-scpls');
+		$this->output->set_output($playlist);
+	}
+
 	function _non_existent()
 	{
 		$this->data["title"] .= " - Not Found";
@@ -483,11 +516,19 @@ class File extends MY_Controller {
 		if (!$this->muser->logged_in()) {
 			$this->muser->require_session();
 			// keep the upload but require the user to login
-			$this->session->set_userdata("last_upload", array(
-				"ids" => $ids,
-				"lexer" => $lexer
-			));
-			$this->session->set_flashdata("uri", "file/claim_id");
+			$last_upload = $this->session->userdata("last_upload");
+			if ($last_upload === false) {
+				$last_upload = array(
+					"ids" => [],
+					"lexer" => "",
+				);
+			}
+			$last_upload = array(
+				"ids" => array_merge($last_upload['ids'], $ids),
+				"lexer" => "",
+			);
+			$this->session->set_userdata("last_upload", $last_upload);
+			$this->data["redirect_uri"] = "file/claim_id";
 			$this->muser->require_access("basic");
 		}
 
@@ -608,6 +649,7 @@ class File extends MY_Controller {
 		handle_etag($etag);
 
 		$thumb_size = 150;
+		$cache_timeout = 60*60*24*30; # 1 month
 
 		$filedata = $this->mfile->get_filedata($id);
 		if (!$filedata) {
@@ -616,7 +658,7 @@ class File extends MY_Controller {
 
 		$cache_key = $filedata['data_id'].'_thumb_'.$thumb_size;
 
-		$thumb = cache_function($cache_key, 100, function() use ($filedata, $thumb_size){
+		$thumb = cache_function($cache_key, $cache_timeout, function() use ($filedata, $thumb_size){
 			$CI =& get_instance();
 			$img = new libraries\Image($this->mfile->file($filedata["data_id"]));
 			$img->makeThumb($thumb_size, $thumb_size);
@@ -642,10 +684,10 @@ class File extends MY_Controller {
 			->from('files')
 			->join('file_storage', 'file_storage.id = files.file_storage_id')
 			->where('
-				(user = '.$this->db->escape($user).')
+				(files.user = '.$this->db->escape($user).')
 				AND (
-					mimetype LIKE "image%"
-					OR mimetype IN ("application/pdf")
+					mimetype LIKE \'image%\'
+					OR mimetype IN (\'application/pdf\')
 				)', null, false)
 			->order_by('date', 'desc')
 			->get()->result_array();
@@ -654,7 +696,7 @@ class File extends MY_Controller {
 			assert($item["user"] === $user);
 			$item["data_id"] = $item['hash']."-".$item['storage_id'];
 			$query[$key]["data_id"] =  $item["data_id"];
-			if (!$this->mfile->valid_id($item["id"])) {
+			if (!$this->mfile->valid_filedata($item)) {
 				unset($query[$key]);
 				continue;
 			}
@@ -1020,10 +1062,11 @@ class File extends MY_Controller {
 			"sess_expiration" => $this->config->item("sess_expiration"),
 		);
 
-		$query = $this->db->select('file_storage_id storage_id, id, user, date')
+		$query = $this->db->select('file_storage_id storage_id, files.id, user, files.date, hash')
 			->from('files')
+			->join('file_storage', "file_storage.id = files.file_storage_id")
 			->where("user", 0)
-			->where("date <", $oldest_session_time)
+			->where("files.date <", $oldest_session_time)
 			->get()->result_array();
 
 		foreach($query as $row) {

@@ -11,7 +11,8 @@ define(
 		'tablesorter',
 		'jquery',
 		'jquery.lazyload',
-		'bootstrap'
+		'bootstrap',
+		'jquery.checkboxes'
 	],
 	function (
 		require,
@@ -49,6 +50,11 @@ define(
 				this.setupToggleSelectAllEvent();
 				this.setupLineWrapToggle();
 				this.setupLazyLoadingImages();
+				this.setupTableRangeSelect();
+			},
+
+			setupTableRangeSelect: function () {
+				$('#upload_history').checkboxes('range', true);
 			},
 
 			setupLineHighlight: function () {
@@ -82,7 +88,7 @@ define(
 
 			setupLazyLoadingImages: function () {
 				if ($(ui.lazyLoadingImages).length > 0) {
-					$(ui.lazyLoadingImages).show().lazyload({treshold: 200});
+					$(ui.lazyLoadingImages).lazyload({treshold: 200});
 				}
 			}
 		};

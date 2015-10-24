@@ -47,10 +47,11 @@ class file extends \controllers\api\api_controller {
 
 	public function get_config()
 	{
-		// TODO: return more fields?
 		return array(
 			"upload_max_size" => $this->config->item("upload_max_size"),
 			"max_files_per_request" => intval(ini_get("max_file_uploads")),
+			"max_input_vars" => intval(ini_get("max_input_vars")),
+			"request_max_size" => return_bytes(ini_get("post_max_size")),
 		);
 	}
 
@@ -58,6 +59,9 @@ class file extends \controllers\api\api_controller {
 	{
 		$this->muser->require_access("apikey");
 		$history = \service\files::history($this->muser->get_userid());
+		foreach ($history['items'] as $key => $item) {
+			unset($history['items'][$key]['thumbnail']);
+		}
 		return $history;
 	}
 

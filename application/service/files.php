@@ -24,16 +24,19 @@ class files {
 			->where('user', $user)
 			->get()->result_array();
 		foreach ($query as $key => $item) {
+			if (\libraries\Image::type_supported($item["mimetype"])) {
+				$item['thumbnail'] = site_url("file/thumbnail/".$item['id']);
+			}
 			$items[$item["id"]] = $item;
 		}
 
 		$total_size = $CI->db->query("
-			SELECT coalesce(sum(filesize), 0) sum
+			SELECT coalesce(sum(sub.filesize), 0) sum
 			FROM (
-				SELECT DISTINCT `".$CI->db->dbprefix."file_storage`.id, filesize
-				FROM `".$CI->db->dbprefix."file_storage`
-				JOIN `".$CI->db->dbprefix."files` ON `".$CI->db->dbprefix."file_storage`.id = `".$CI->db->dbprefix."files`.file_storage_id
-				WHERE user = ?
+				SELECT DISTINCT fs.id, filesize
+				FROM ".$CI->db->dbprefix."file_storage fs
+				JOIN ".$CI->db->dbprefix."files f ON fs.id = f.file_storage_id
+				WHERE f.user = ?
 
 			) sub
 			", array($user))->row_array();
@@ -51,7 +54,12 @@ class files {
 		$multipaste_items_grouped = array();
 		$multipaste_items = array();
 
-		$query = $CI->db->get_where("multipaste", array("user_id" => $user))->result_array();
+		# APIv1-cleanup: Remove multipaste_id and user_id
+		$query = $CI->db
+			->select('m.url_id, m.multipaste_id, m.user_id, m.date')
+			->from("multipaste m")
+			->where("user_id", $user)
+			->get()->result_array();
 		$multipaste_info = array();
 		foreach ($query as $item) {
 			$multipaste_info[$item["url_id"]] = $item;
