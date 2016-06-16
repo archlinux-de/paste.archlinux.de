@@ -14,12 +14,17 @@ class Muser extends CI_Model {
 	// last level has the most access
 	private $access_levels = array("basic", "apikey", "full");
 
+	private $hashalgo;
+	private $hashoptions = array();
+
 	function __construct()
 	{
 		parent::__construct();
 
 		$this->load->helper("filebin");
 		$this->load->driver("duser");
+		$this->hashalgo = $this->config->item('auth_db')['hashing_algorithm'];
+		$this->hashoptions = $this->config->item('auth_db')['hashing_options'];
 	}
 
 	function has_session()
@@ -240,6 +245,19 @@ class Muser extends CI_Model {
 		}
 	}
 
+	public function set_password($userid, $password) {
+		$this->db->where('id', $userid)
+			->update('users', array(
+				'password' => $this->hash_password($password)
+			));
+	}
+
+	public function rehash_password($userid, $password, $hash) {
+		if (password_needs_rehash($hash, $this->hashalgo, $this->hashoptions)) {
+			$this->set_password($userid, $password);
+		}
+	}
+
 	public function get_upload_id_limits()
 	{
 		$userid = $this->get_userid();
@@ -258,11 +276,11 @@ class Muser extends CI_Model {
 
 	function hash_password($password)
 	{
-
-		require_once APPPATH."third_party/PasswordHash.php";
-
-		$hasher = new PasswordHash(9, false);
-		return $hasher->HashPassword($password);
+		$hash = password_hash($password, $this->hashalgo, $this->hashoptions);
+		if ($hash === false) {
+			throw new \exceptions\ApiException('user/hash_password/failed', "Failed to hash password");
+		}
+		return $hash;
 	}
 
 }

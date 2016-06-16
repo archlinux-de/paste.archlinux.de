@@ -435,9 +435,19 @@ if (extension_loaded("ldap")) {
 	);
 }
 
-// This is only used it the driver is set to fluxbb
+// This is only used if the driver is set to fluxbb
 $config['auth_fluxbb'] = array(
 	'database' => 'fluxbb'
+);
+
+// This is only used if the driver is set to db. Changes to these settings will be
+// applied when users sucessfully log in with their password.
+// For information about these values refer to https://secure.php.net/manual/en/function.password-hash.php
+$config['auth_db'] = array(
+	'hashing_options' => array(
+		'cost' => 10,
+	),
+	'hashing_algorithm' => PASSWORD_DEFAULT,
 );
 
 
