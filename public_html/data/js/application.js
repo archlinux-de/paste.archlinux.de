@@ -7,12 +7,13 @@ define(
 		'lexer-input',
 		'tabwidth-input',
 		'thumbnail-view',
+		'multipaste',
 		'uploader',
 		'tablesorter',
 		'jquery',
 		'jquery.lazyload',
 		'bootstrap',
-		'jquery.checkboxes'
+		'jquery.checkboxes',
 	],
 	function (
 		require,
@@ -20,6 +21,7 @@ define(
 		LexerInput,
 		TabwidthInput,
 		ThumbnailView,
+		Multipaste,
 		Uploader,
 		TableSorter,
 		$
@@ -44,13 +46,17 @@ define(
 				TabwidthInput.initialize();
 				LexerInput.initialize();
 				ThumbnailView.initialize();
+				Multipaste.initialize();
 				Uploader.initialize();
 				TableSorter.initialize();
 				this.configureTooltips();
+				this.setupHistoryPopovers();
 				this.setupToggleSelectAllEvent();
 				this.setupLineWrapToggle();
 				this.setupLazyLoadingImages();
 				this.setupTableRangeSelect();
+				this.setupAsciinema();
+				this.focusLoginFormOnClick();
 			},
 
 			setupTableRangeSelect: function () {
@@ -65,6 +71,16 @@ define(
 				$('[rel="tooltip"]').tooltip({
 					placement: 'bottom',
 					container: 'body',
+				});
+			},
+
+			setupHistoryPopovers: function () {
+				$('#upload_history a').popover({
+					trigger: 'hover',
+					placement: 'bottom',
+					html: true,
+					viewport: '#upload_history',
+					template: '<div class="popover" role="tooltip"><div class="arrow"></div><h3 class="popover-title"></h3><pre class="popover-content"></pre></div>'
 				});
 			},
 
@@ -90,7 +106,22 @@ define(
 				if ($(ui.lazyLoadingImages).length > 0) {
 					$(ui.lazyLoadingImages).lazyload({treshold: 200});
 				}
-			}
+			},
+
+			setupAsciinema: function () {
+				_.each($('.asciinema_player'), function (item) {
+					item = $(item);
+					asciinema.player.js.CreatePlayer(item.attr("id"), item.data("url"));
+				});
+			},
+
+			focusLoginFormOnClick: function () {
+				$('.dropdown-toggle').on('click', function (e) {
+					setTimeout(function() {
+						$(e.target).parent().find(".dropdown-menu input.form-control").first().focus();
+					}, 0);
+				});
+			},
 		};
 
 		return App;

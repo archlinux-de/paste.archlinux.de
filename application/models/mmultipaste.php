@@ -70,16 +70,16 @@ class Mmultipaste extends CI_Model {
 			LIMIT 1';
 		$query = $this->db->query($sql, array($id));
 
-		if ($query->num_rows() == 1) {
-			return true;
-		} else {
-			return false;
-		}
+		return $query->num_rows() == 1;
 	}
 
 	public function valid_id($id)
 	{
 		$files = $this->get_files($id);
+		if (count($files) === 0) {
+			return false;
+		}
+
 		foreach ($files as $file) {
 			if (!$this->mfile->valid_id($file["id"])) {
 				return false;
@@ -104,6 +104,18 @@ class Mmultipaste extends CI_Model {
 		return $this->config->item("upload_path")."/special/multipaste-tarballs/".substr(md5($id), 0, 3)."/$id.tar.gz";
 	}
 
+	public function delete_by_user($userid)
+	{
+		$query = $this->db->select("url_id")
+			->where("user_id", $userid)
+			->get("multipaste")->result_array();
+		$ids = array_map(function ($a) {return $a['url_id'];}, $query);
+
+		foreach ($ids as $id) {
+			$this->delete_id($id);
+		}
+	}
+
 	public function delete_id($id)
 	{
 		$this->db->where('url_id', $id)
@@ -113,11 +125,7 @@ class Mmultipaste extends CI_Model {
 		$f = new \service\storage($this->get_tarball_path($id));
 		$f->unlink();
 
-		if ($this->id_exists($id))  {
-			return false;
-		}
-
-		return true;
+		return !$this->id_exists($id);
 	}
 
 	public function get_owner($id)

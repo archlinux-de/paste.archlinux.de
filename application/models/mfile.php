@@ -64,11 +64,7 @@ class Mfile extends CI_Model {
 			->limit(1)
 			->get();
 
-		if ($query->num_rows() == 1) {
-			return true;
-		} else {
-			return false;
-		}
+		return $query->num_rows() == 1;
 	}
 
 	function get_filedata($id)
@@ -103,10 +99,8 @@ class Mfile extends CI_Model {
 	}
 
 	// Add a file to the DB
-	function add_file($id, $filename, $storage_id)
+	function add_file($userid, $id, $filename, $storage_id)
 	{
-		$userid = $this->muser->get_userid();
-
 		$this->db->insert("files", array(
 			"id" => $id,
 			"filename" => $filename,
@@ -197,10 +191,18 @@ class Mfile extends CI_Model {
 			->limit(1)
 			->get();
 
-		if ($query->num_rows() == 0) {
-			return true;
-		} else {
-			return false;
+		return $query->num_rows() == 0;
+	}
+
+	public function delete_by_user($userid)
+	{
+		$query = $this->db->select("id")
+			->where("user", $userid)
+			->get("files")->result_array();
+		$ids = array_map(function ($a) {return $a['id'];}, $query);
+
+		foreach ($ids as $id) {
+			$this->delete_id($id);
 		}
 	}
 
@@ -210,7 +212,7 @@ class Mfile extends CI_Model {
 
 		// Delete the file and all multipastes using it
 		// Note that this does not delete all relations in multipaste_file_map
-		// which is actually done by a SQL contraint.
+		// which is actually done by an SQL contraint.
 		// TODO: make it work properly without the constraint
 		$map = $this->db->select('url_id')
 			->distinct()
@@ -244,7 +246,7 @@ class Mfile extends CI_Model {
 	public function delete_data_id($data_id)
 	{
 		list ($hash, $storage_id) = explode("-", $data_id);
-		
+
 		$this->db->where('id', $storage_id)
 			->delete('file_storage');
 		if (file_exists($this->file($data_id))) {

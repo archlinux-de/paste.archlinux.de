@@ -1,6 +1,45 @@
 This file lists major, incompatible or otherwise important changes, you should look at it after every update.
 
-2016-06-05 PHP COMPATABILITY NOTE: This software now requires PHP >= 5.5
+1.1.1 2016-11-05
+ - Fix bug in install-git-hooks.sh
+
+1.1.0 2016-11-05
+ - Add support for creating multipastes via the web interface
+ - Misc bug fixes
+
+1.0.0 2016-09-19
+ - Code refactoring and various small bugfixes
+
+2016-08-23 DEPRECATION: The old plain text API used by fb-client <2.0 is now
+           deprecated. A warning will be shown for every file uploaded via
+           the old API.
+2016-08-23 IMPORTANT: Fix an issue with git hooks not working when the installation is
+           moved. install-git-hooks.sh now creates relative symlinks. If you have moved
+           your installation and `git pull` does not display the content of the NEWS file,
+           you have to run `scripts/install-git-hooks.sh` manually once. Working
+           installations are upgraded automatically.
+2016-08-23 NEW DEPENDENCY: composer. Currently only used for the test suite, but it will
+           likely be used more widely in the future.
+2016-08-23 Allow users to delete their own account via a link on the profile page.
+2016-08-23 Add code coverage output to test suite and lots of new tests.
+
+2016-07-21 Add asciinema support for files called *.asciinema.json
+
+2016-07-13 Fix incorrect content in clipboard when copying paste content from
+           the HTML render with firefox
+2016-07-13 Add asciinema support for files called asciinema.json
+
+2016-07-10 API: Fix error when trying to use v2.1 saying that that version is
+           not supported even though it is
+2016-07-10 Add docker-compose file to easily spin up a demo instance
+2016-07-10 Update to current Bootstrap CSS framework version
+
+2016-06-16 Automatically update submodules in post-merge hook
+
+2016-06-16 Replace qrencode and markdown with PHP libraries (managed via git submodules)
+2016-06-16 Include all documentation from the wiki in ./doc
+
+2016-06-05 PHP COMPATIBILITY NOTE: This software now requires PHP >= 5.5
 2016-06-05 Switch to PHP's password_hash function. Allow changing password
            hashing settings (see config.php)
 2016-05-05 Add Dockerfile

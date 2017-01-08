@@ -1,4 +1,7 @@
 #!/bin/bash
+
+set -e
+
 SCRIPTS_DIR=$(realpath $(dirname "$0"))
 HOOK_DIR=$(realpath "$SCRIPTS_DIR/../.git/hooks")
 HOOK_NAMES="applypatch-msg pre-applypatch post-applypatch pre-commit prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-receive update post-receive post-update pre-auto-gc"
@@ -11,5 +14,5 @@ for hook in $HOOK_NAMES; do
     # create the symlink, overwriting the file if it exists
     # probably the only way this would happen is if you're using an old version of git
     # -- back when the sample hooks were not executable, instead of being named ____.sample
-    ln -s -f $SCRIPTS_DIR/hooks-wrapper.sh $HOOK_DIR/$hook
+    ln -s -f ../../scripts/hooks-wrapper.sh $HOOK_DIR/$hook
 done

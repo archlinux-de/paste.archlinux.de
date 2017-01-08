@@ -38,3 +38,11 @@
 	</div>
 </div>
 </form>
+
+<div class="row vertical-space-small"></div>
+
+<?php if(auth_driver_function_implemented("can_delete_account")) { ?>
+<div class="row">
+	<p>If you want to permanently delete your account, please click <a href="<?php echo site_url("user/delete_account"); ?>">here</a>.</p>
+</div>
+<?php } ?>

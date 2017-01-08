@@ -88,8 +88,6 @@
 <div class="row">
 	<div class="col-lg-6">
 		<div class="page-header"><h1>Features</h1></div>
-		<p>For shell uploading/pasting and download information for the client go to <a href="<?php echo site_url("file/client"); ?>"><?php echo site_url("file/client"); ?></a></p>
-		<p>You can use the <?php echo anchor("file/upload_history", "history"); ?> to find old uploads.</p>
 		<h3>How to link your pastes:</h3>
 		<dl class="dl-horizontal">
 			<dt>/&lt;ID&gt;/</dt><dd>automatically highlight the paste</dd>
@@ -100,9 +98,15 @@
 			<dt>/&lt;ID&gt;/rmd</dt><dd>convert markdown to HTML</dd>
 			<dt>/&lt;ID&gt;/ascii</dt><dd>convert text with ANSI (shell) escape codes to HTML</dd>
 			<dt>/&lt;ID&gt;/info</dt><dd>display some information about the ID</dd>
-			<dt>/file/thumbnail/&lt;ID&gt;</dt><dd>return a JPEG thumbnail for the ID (only work for some file types)</dd>
+			<dt>/file/thumbnail/&lt;ID&gt;</dt><dd>return a JPEG thumbnail for the ID (only works for some file types)</dd>
 		</dl>
-		<p>If your upload is not detected as text, only <b>/&lt;ID&gt;/qr</b>, <b>/&lt;ID&gt;/plain</b>, <b>/&lt;ID&gt;/info</b> and <b>/file/thumbnail/&lt;ID&gt;</b> will work as above and all others will simply return the file with the detected MIME type.</p>
+		<p>
+			If your upload is not detected as text, only <b>/&lt;ID&gt;/qr</b>,
+			<b>/&lt;ID&gt;/plain</b>, <b>/&lt;ID&gt;/info</b> and
+			<b>/file/thumbnail/&lt;ID&gt;</b> will work as above and all others will simply
+			return the file with the detected MIME type.
+		</p>
+
 		<h3>How to link your multipastes:</h3>
 		<p>Multipaste IDs begin with <code>m-</code> and only support the following features.</p>
 		<dl class="dl-horizontal">
@@ -112,13 +116,53 @@
 			<dt>/&lt;ID&gt;/tar</dt><dd>download a tarball of all files in the multipaste (files may be renamed to avoid conflicts)</dd>
 			<dt>/&lt;ID&gt;/pls</dt><dd>download a PLS playlist of all audio/video files in the multipaste</dd>
 		</dl>
+
+		<h3>Special filenames:</h3>
+		<dl class="dl-horizontal">
+			<dt>*.asciinema.json</dt><dd>treat the file as an <a href="https://asciinema.org/">asciinema screencast</a> and display a videoplayer for it</dd>
+		</dl>
 	</div>
+
 	<div class="col-lg-6">
 		<div class="page-header"><h1>Information</h1></div>
-		<p>This website's primary goal is aiding developers, power users, students and alike in solving problems, debugging software, sharing their configuration, etc. It is not intended to distribute confidential or harmful information, scripts or software.</p>
+		<p>
+			This website's primary goal is aiding developers, power users, students and
+			alike in solving problems, debugging software, sharing their configuration,
+			etc. It is not intended to distribute confidential or harmful information,
+			scripts or software or copyrighted content for which you do not have a
+			distribution license.
+		</p>
 		<?php if(auth_driver_function_implemented("can_register_new_users")) { ?>
-			<p>If you want an account, ask someone who is already using this service to <a href="<?php echo site_url("user/invite"); ?>">invite</a> you.</p>
-			<p>Invitations are used to control abuse and encourage users to "be nice". They are not intended as a means of exclusivity. In case of abuse reports, involved accounts may be banned and the user who invited them may also be banned. The invitation tree will be followed upwards if necessary.</p>
+			<p>
+				If you want an account, ask someone who is already using this
+				service to <a href="<?php echo site_url("user/invite"); ?>">invite</a> you.
+			</p>
+			<p>
+				Invitations are used to control abuse and encourage users to "be nice". They
+				are not intended as a means of exclusivity. In case of abuse reports, involved
+				accounts may be banned and the user who invited them may also be banned. The
+				invitation tree will be followed upwards if necessary.
+			</p>
 		<?php } ?>
+
+		<h3>Clients</h3>
+			<h4>Linux</h4>
+				<p>
+					Development: <?php echo anchor("https://git.server-speed.net/users/flo/fb/"); ?><br />
+					Latest release: <?php echo $client_link ? anchor($client_link) : "unknown"; ?><br />
+					GPG sigs, older versions: <?php echo anchor("https://paste.xinu.at/data/client"); ?>
+				</p>
+
+				<p>
+					Arch Linux: pacman -S fb-client<br />
+					Gentoo: Add <a href="https://git.holgersson.xyz/holgersson-overlay/tree/README">this overlay</a> and run <code>emerge -a fb-client</code><br />
+				</p>
+
+			<h4>Android</h4>
+				<p>
+					Development: <a href="https://github.com/sebastianrakel/fb-client-android">sebastianrakel/fb-client-android @ Github</a><br>
+					Google Playstore: <a href="https://play.google.com/store/apps/details?id=eu.devunit.fb_client">fb-client Android @ Google Play</a><br>
+					F-Droid Store: <a href="https://f-droid.org/repository/browse/?fdid=eu.devunit.fb_client">fb-client Android @ F-Droid</a><br>
+				</p>
 	</div>
 </div>

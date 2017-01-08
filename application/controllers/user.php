@@ -38,7 +38,7 @@ class User extends MY_Controller {
 		if ($this->muser->login($username, $password)) {
 			$this->output->set_status_header(204);
 		} else {
-			$this->output->set_status_header(401);
+			$this->output->set_status_header(403);
 		}
 	}
 
@@ -200,7 +200,7 @@ class User extends MY_Controller {
 			$password = $this->input->post("password");
 			$password_confirm = $this->input->post("password_confirm");
 
-			if (!$username || strlen($username) > 32 || !preg_match("/^[a-z0-9]+$/", $username)) {
+			if (!$this->muser->valid_username($username)) {
 				$error[]= "Invalid username (only up to 32 chars of a-z0-9 are allowed).";
 			} else {
 				if ($this->muser->username_exists($username)) {
@@ -208,8 +208,7 @@ class User extends MY_Controller {
 				}
 			}
 
-			$this->load->helper("email");
-			if (!valid_email($email)) {
+			if (!$this->muser->valid_email($email)) {
 				$error[]= "Invalid email.";
 			}
 
@@ -218,13 +217,7 @@ class User extends MY_Controller {
 			}
 
 			if (empty($error)) {
-				$this->db->set(array(
-						'username' => $username,
-						'password' => $this->muser->hash_password($password),
-						'email'    => $email,
-						'referrer' => $referrer
-					))
-					->insert('users');
+				$this->muser->add_user($username, $password, $email, $referrer);
 
 				$this->db->where('key', $key)
 					->delete('actions');
@@ -246,6 +239,67 @@ class User extends MY_Controller {
 		$this->load->view('header', $this->data);
 		$this->load->view($this->var->view_dir.'register', $this->data);
 		$this->load->view('footer', $this->data);
+	}
+
+	public function delete_account()
+	{
+		$this->muser->require_access();
+		$this->duser->require_implemented("can_delete_account");
+
+		if ($_SERVER["REQUEST_METHOD"] == "GET") {
+			return $this->_delete_account_form();
+		} elseif ($_SERVER["REQUEST_METHOD"] == "POST") {
+			return $this->_delete_account_process();
+		}
+	}
+
+	public function _delete_account_form()
+	{
+		$this->data['username'] = $this->muser->get_username();
+
+		$this->load->view('header', $this->data);
+		$this->load->view($this->var->view_dir.'delete_account_form', $this->data);
+		$this->load->view('footer', $this->data);
+	}
+
+	public function _delete_account_process()
+	{
+		$username = $this->muser->get_username();
+		$password = $this->input->post("password");
+
+		$useremail = $this->muser->get_email($this->muser->get_userid());
+
+		if ($this->muser->delete_user($username, $password)) {
+			$this->muser->logout();
+
+			$this->load->library("email");
+			$this->email->from($this->config->item("email_from"));
+			$this->email->to($useremail);
+			$this->email->subject("FileBin account deleted");
+			$this->email->message(""
+				."Your FileBin account '${username}' at ".site_url()."\n"
+				."has been permemently deleted.\n"
+				."\n"
+				."The request has been sent from the IP address '${_SERVER["REMOTE_ADDR"]}'\n"
+				."and was confirmed with your password.\n"
+				."\n"
+				."Thank you for using FileBin!\n"
+				);
+			$this->email->send();
+			unset($this->data['username']);
+			unset($this->data['user_logged_in']);
+
+			$this->load->view('header', $this->data);
+			$this->load->view($this->var->view_dir.'delete_account_success', $this->data);
+			$this->load->view('footer', $this->data);
+			return;
+		} else {
+			$this->data['alerts'][] = array(
+				"type" => "danger",
+				"message" => "Your password was incorrect",
+			);
+			return $this->_delete_account_form();
+		}
 	}
 
 	// This routes the different steps of a password reset
@@ -469,8 +523,7 @@ class User extends MY_Controller {
 				return null;
 			}
 
-			$this->load->helper("email");
-			if (!valid_email($value)) {
+			if (!$this->muser->valid_email($value)) {
 				throw new \exceptions\PublicApiException("user/profile/invalid-email", "Invalid email");
 			}
 
@@ -587,7 +640,7 @@ class User extends MY_Controller {
 
 	function cron()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 
 		if ($this->config->item('actions_max_age') == 0) return;
 
@@ -617,14 +670,13 @@ class User extends MY_Controller {
 
 	function add_user()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 		$this->duser->require_implemented("can_register_new_users");
 
 		$error = array();
 
-		// FIXME: deduplicate username/email verification with register()
 		$username = $this->_get_line_cli("Username", function($username) {
-			if (!$username || strlen($username) > 32 || !preg_match("/^[a-z0-9]+$/", $username)) {
+			if (!$this->muser->valid_username($username)) {
 				echo "Invalid username (only up to 32 chars of a-z0-9 are allowed).\n";
 				return false;
 			} else {
@@ -636,9 +688,8 @@ class User extends MY_Controller {
 			return true;
 		});
 
-		$this->load->helper("email");
 		$email = $this->_get_line_cli("Email", function($email) {
-			if (!valid_email($email)) {
+			if (!$this->muser->valid_email($email)) {
 				echo "Invalid email.\n";
 				return false;
 			}
@@ -653,13 +704,7 @@ class User extends MY_Controller {
 			return true;
 		});
 
-		$this->db->set(array(
-				'username' => $username,
-				'password' => $this->muser->hash_password($password),
-				'email'    => $email,
-				'referrer' => NULL
-			))
-			->insert('users');
+		$this->muser->add_user($username, $password, $email, NULL);
 
 		echo "User added\n";
 	}

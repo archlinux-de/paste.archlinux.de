@@ -165,11 +165,20 @@ class Pygments {
 	private function filename2lexer()
 	{
 		$namearray = array(
+			'asciinema.json' => 'asciinema',
 			'PKGBUILD' => 'bash',
 			'.vimrc' => 'vim'
 		);
 		if (array_key_exists($this->filename, $namearray)) return $namearray[$this->filename];
 
+		$longextarray = array(
+				'.asciinema.json' => 'asciinema',
+			);
+		foreach ($longextarray as $key => $lexer) {
+			if (substr($this->filename, -strlen($key)) === $key) {
+				return $lexer;
+			}
+		}
 
 		if (strpos($this->filename, ".") !== false) {
 			$extension = substr($this->filename, strrpos($this->filename, ".") + 1);
@@ -183,6 +192,7 @@ class Pygments {
 				'coffee' => 'coffee-script',
 				'cpp' => 'cpp',
 				'diff' => 'diff',
+				'haml' => 'haml',
 				'h' => 'c',
 				'hs' => 'haskell',
 				'html' => 'xml',
@@ -204,6 +214,7 @@ class Pygments {
 				'sh' => 'bash',
 				'tcl' => 'tcl',
 				'tex' => 'tex',
+				'yml' => 'yaml',
 			);
 			if (array_key_exists($extension, $extensionarray)) return $extensionarray[$extension];
 		}

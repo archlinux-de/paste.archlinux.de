@@ -104,5 +104,15 @@ class MY_Controller extends CI_Controller {
 		$this->load->model("muser");
 		$this->data["user_logged_in"] = $this->muser->logged_in();
 		$this->data['redirect_uri'] = $this->uri->uri_string();
+		if ($this->muser->has_session()) {
+			$this->data['show_multipaste_queue'] = !empty((new \service\multipaste_queue)->get());
+		}
+	}
+
+	protected function _require_cli_request()
+	{
+		if (!$this->input->is_cli_request()) {
+			throw new \exceptions\PublicApiException("api/cli-only", "This function can only be accessed via the CLI interface");
+		}
 	}
 }

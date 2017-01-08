@@ -19,11 +19,12 @@ class test_api_v1 extends \test\Test {
 		$CI->load->model("muser");
 		$CI->load->model("mfile");
 
+		$this->startServer(23115);
 	}
 
 	private function uploadFile($apikey, $file)
 	{
-		$ret = $this->CallAPI("POST", "$this->server/api/v1.1.0/file/upload", array(
+		$ret = $this->CallAPI("POST", "$this->server_url/api/v1.1.0/file/upload", array(
 			"apikey" => $apikey,
 			"file[1]" => curl_file_create($file),
 		));
@@ -34,13 +35,8 @@ class test_api_v1 extends \test\Test {
 	private function createUser($counter)
 	{
 		$CI =& get_instance();
-		$CI->db->insert("users", array(
-			'username' => "testuser-api_v1-$counter",
-			'password' => $CI->muser->hash_password("testpass$counter"),
-			'email'    => "testuser$counter@localhost.invalid",
-			'referrer' => NULL
-		));
-
+		$CI->muser->add_user("apiv1testuser$counter", "testpass$counter",
+			"testuser$counter@testsuite.local", NULL);
 		return $CI->db->insert_id();
 	}
 
@@ -59,7 +55,7 @@ class test_api_v1 extends \test\Test {
 
 	private function callEndpoint($verb, $endpoint, $data)
 	{
-		return $this->CallAPI($verb, "$this->server/api/v1.0.0/$endpoint", $data);
+		return $this->CallAPI($verb, "$this->server_url/api/v1.0.0/$endpoint", $data);
 	}
 
 	public function test_callPrivateEndpointsWithoutApikey()
@@ -80,7 +76,7 @@ class test_api_v1 extends \test\Test {
 			$this->t->is_deeply(array(
 				'status' => 'error',
 				'error_id' => 'api/not-authenticated',
-				'message' => 'Not authenticated. FileBin requires you to have an account, please go to the homepage for more information.',
+				'message' => 'Not authenticated. FileBin requires you to have an account, please go to the homepage at http://127.0.0.1:23115/ for more information.',
 			   ), $ret, "expected error");
 		}
 	}
@@ -89,6 +85,8 @@ class test_api_v1 extends \test\Test {
 	{
 		$testconfig = array(
 			array(
+				"have_level" => "basic",
+				"wanted_level" => "apikey",
 				"apikey" => $this->createUserAndApikey('basic'),
 				"endpoints" => array(
 					"file/delete",
@@ -96,6 +94,8 @@ class test_api_v1 extends \test\Test {
 				),
 			),
 			array(
+				"have_level" => "apikey",
+				"wanted_level" => "full",
 				"apikey" => $this->createUserAndApikey(),
 				"endpoints" => array(
 					"user/apikeys",
@@ -113,7 +113,7 @@ class test_api_v1 extends \test\Test {
 				$this->t->is_deeply(array(
 					'status' => "error",
 					'error_id' => "api/insufficient-permissions",
-					'message' => "Access denied: Access level too low",
+					'message' => "Access denied: Access level too low. Required: ${test['wanted_level']}; Have: ${test['have_level']}",
 				   ), $ret, "expected permission error");
 			}
 		}
@@ -123,7 +123,7 @@ class test_api_v1 extends \test\Test {
 	{
 		$this->createUser(1);
 		$ret = $this->CallEndpoint("POST", "user/create_apikey", array(
-			"username" => "testuser-api_v1-1",
+			"username" => "apiv1testuser1",
 			"password" => "testpass1",
 			"access_level" => "apikey",
 			"comment" => "main api key",
@@ -138,7 +138,7 @@ class test_api_v1 extends \test\Test {
 		$userid = $this->createUser(2);
 		$apikey = $this->createApikey($userid);
 		$ret = $this->CallEndpoint("POST", "user/apikeys", array(
-			"username" => "testuser-api_v1-2",
+			"username" => "apiv1testuser2",
 			"password" => "testpass2",
 		));
 		$this->expectSuccess("get apikeys", $ret);
@@ -181,7 +181,7 @@ class test_api_v1 extends \test\Test {
 	{
 		$userid = $this->createUser(3);
 		$ret = $this->CallEndpoint("POST", "user/apikeys", array(
-			"username" => "testuser-api_v1-3",
+			"username" => "apiv1testuser3",
 			"password" => "wrongpass",
 		));
 		$this->expectError("invalid password", $ret);
@@ -197,7 +197,7 @@ class test_api_v1 extends \test\Test {
 	{
 		$userid = $this->createUser(4);
 		$ret = $this->CallEndpoint("POST", "user/apikeys", array(
-			"username" => "testuser-api_v1-invalid",
+			"username" => "apiv1testuserinvalid",
 			"password" => "testpass4",
 		));
 		$this->expectError("invalid username", $ret);

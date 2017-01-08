@@ -134,6 +134,95 @@ class Muser extends CI_Model {
 		return $this->session->userdata('username');
 	}
 
+	/*
+	 * Check if a given username is valid.
+	 *
+	 * Valid usernames contain only lowercase characters and numbers. They are
+	 * also <= 32 characters in length.
+	 *
+	 * @return boolean
+	 */
+	public function valid_username($username)
+	{
+		return strlen($username) <= 32 && preg_match("/^[a-z0-9]+$/", $username);
+	}
+
+	/**
+	 * Check if a given email is valid. Only perform minimal checking since
+	 * verifying emails is very very difficuly.
+	 *
+	 * @return boolean
+	 */
+	public function valid_email($email)
+	{
+		$this->load->helper("email");
+		return valid_email($email);
+	}
+
+	public function add_user($username, $password, $email, $referrer)
+	{
+		if (!$this->valid_username($username)) {
+			throw new \exceptions\PublicApiException("user/invalid-username", "Invalid username (only up to 32 chars of a-z0-9 are allowed)");
+		} else {
+			if ($this->muser->username_exists($username)) {
+				throw new \exceptions\PublicApiException("user/username-already-exists", "Username already exists");
+			}
+		}
+
+		if (!$this->valid_email($email)) {
+			throw new \exceptions\PublicApiException("user/invalid-email", "Invalid email");
+		}
+
+		$this->db->set(array(
+			'username' => $username,
+			'password' => $this->hash_password($password),
+			'email'    => $email,
+			'referrer' => $referrer
+		))
+		->insert('users');
+	}
+
+	/**
+	 * Delete a user.
+	 *
+	 * @param username
+	 * @param password
+	 * @return true on sucess, false otherwise
+	 */
+	public function delete_user($username, $password)
+	{
+		$this->duser->require_implemented("can_delete_account");
+
+		if ($this->duser->test_login_credentials($username, $password)) {
+			$userid = $this->get_userid_by_name($username);
+			assert($userid !== null);
+
+			$this->db->delete('profiles', array('user' => $userid));
+
+			$this->load->model("mfile");
+			$this->load->model("mmultipaste");
+			$this->mfile->delete_by_user($userid);
+			$this->mmultipaste->delete_by_user($userid);
+
+			# null out user data to keep referer information traceable
+			# If referer information was relinked, one user could create many
+			# accounts, delete the account that was used to invite them and
+			# then cause trouble so that the account that invited him gets
+			# banned because the admin thinks that account invited abusers
+			$this->db->set(array(
+				'username' => null,
+				'password' => null,
+				'email'    => null,
+			))
+			->where(array('username' => $username))
+			->update('users');
+
+			return true;
+		}
+
+		return false;
+	}
+
 	function get_userid()
 	{
 		if (!$this->logged_in()) {
@@ -141,6 +230,19 @@ class Muser extends CI_Model {
 		}
 
 		return $this->session->userdata("userid");
+	}
+
+	public function get_userid_by_name($username)
+	{
+		$query = $this->db->select('id')
+			->from('users')
+			->where('username', $username)
+			->get()->row_array();
+		if ($query) {
+			return $query['id'];
+		}
+
+		return null;
 	}
 
 	function get_email($userid)
@@ -168,7 +270,7 @@ class Muser extends CI_Model {
 			return;
 		}
 
-		throw new \exceptions\InsufficientPermissionsException("api/insufficient-permissions", "Access denied: Access level too low");
+		throw new \exceptions\InsufficientPermissionsException("api/insufficient-permissions", "Access denied: Access level too low. Required: $wanted_level; Have: $session_level");
 	}
 
 	function require_access($wanted_level = "full")
@@ -185,7 +287,7 @@ class Muser extends CI_Model {
 			return $this->check_access_level($wanted_level);
 		}
 
-		throw new \exceptions\NotAuthenticatedException("api/not-authenticated", "Not authenticated. FileBin requires you to have an account, please go to the homepage for more information.");
+		throw new \exceptions\NotAuthenticatedException("api/not-authenticated", "Not authenticated. FileBin requires you to have an account, please go to the homepage at ".site_url()." for more information.");
 	}
 
 	function username_exists($username)
@@ -201,7 +303,7 @@ class Muser extends CI_Model {
 			->get()->row_array();
 
 		if (!isset($query["key"]) || $key != $query["key"]) {
-			throw new \exceptions\UserInputException("user/get_action/invalid-action", "Invalid action key");
+			throw new \exceptions\UserInputException("user/get_action/invalid-action", "Invalid action key. Has the key been used already?");
 		}
 
 		return $query;

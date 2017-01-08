@@ -7,7 +7,7 @@
  *
  */
 
-class File extends MY_Controller {
+class File_default extends MY_Controller {
 
 	function __construct()
 	{
@@ -85,11 +85,21 @@ class File extends MY_Controller {
 		$id = $this->uri->segment(1);
 		$lexer = urldecode($this->uri->segment(2));
 
+		if (isset($_GET["cli_deprecated"])) {
+			$this->data['alerts'][] = [
+				"type" => "warning",
+				"message" => "<b>WARNING:</b> This file has been uploaded with a client that uses an old and deprecated API.<br>
+				This API will be removed in the near future. Please update your client to one that uses a more recent API.<br>
+				If you are using fb-client, please upgrade to version 2.0 or newer. For other clients, please check with your client's developer."
+			];
+		}
+
 		$is_multipaste = false;
 		if ($this->mmultipaste->id_exists($id)) {
 			$is_multipaste = true;
 
 			if(!$this->mmultipaste->valid_id($id)) {
+				$this->mmultipaste->delete_id($id);
 				return $this->_non_existent();
 			}
 			$files = $this->mmultipaste->get_files($id);
@@ -130,7 +140,11 @@ class File extends MY_Controller {
 			handle_etag($etag);
 			header("Content-disposition: inline; filename=\"".$id."_qr.png\"\n");
 			header("Content-Type: image/png\n");
-			echo (new \libraries\ProcRunner(array('qrencode', '-s', '10', '-o', '-', site_url($id).'/')))->execSafe()['stdout'];
+			$qr = new \Endroid\QrCode\QrCode();
+			$qr->setText(site_url($id).'/')
+			   ->setSize(350)
+			   ->setErrorCorrection('low')
+			   ->render();
 			exit();
 
 		case "info":
@@ -166,7 +180,7 @@ class File extends MY_Controller {
 			exit();
 		}
 
-		$this->load->library("output_cache");
+		$output_cache = new \libraries\Output_cache();
 
 		foreach ($files as $key => $filedata) {
 			$file = $this->mfile->file($filedata['data_id']);
@@ -204,18 +218,18 @@ class File extends MY_Controller {
 					$base = explode("/", $filedata["mimetype"])[0];
 
 					if (\libraries\Image::type_supported($mimetype)) {
-						$filedata["tooltip"] = $this->_tooltip_for_image($filedata);
+						$filedata["tooltip"] = \service\files::tooltip($filedata);
 						$filedata["orientation"] = libraries\Image::get_exif_orientation($file);
-						$this->output_cache->add_merge(
+						$output_cache->add_merge(
 							array("items" => array($filedata)),
 							'file/fragments/thumbnail'
 						);
 					} else if ($base == "audio") {
-						$this->output_cache->add(array("filedata" => $filedata), "file/fragments/audio-player");
+						$output_cache->add(array("filedata" => $filedata), "file/fragments/audio-player");
 					} else if ($base == "video") {
-						$this->output_cache->add(array("filedata" => $filedata), "file/fragments/video-player");
+						$output_cache->add(array("filedata" => $filedata), "file/fragments/video-player");
 					} else {
-						$this->output_cache->add_merge(
+						$output_cache->add_merge(
 							array("items" => array($filedata)),
 							'file/fragments/uploads_table'
 						);
@@ -224,9 +238,13 @@ class File extends MY_Controller {
 				}
 			}
 
-			$this->output_cache->add_function(function() use ($filedata, $lexer, $is_multipaste) {
-				$this->_highlight_file($filedata, $lexer, $is_multipaste);
-			});
+			if ($lexer == "asciinema") {
+				$output_cache->add(array("filedata" => $filedata), "file/fragments/asciinema-player");
+			} else {
+				$output_cache->add_function(function() use ($output_cache, $filedata, $lexer, $is_multipaste) {
+					$this->_highlight_file($output_cache, $filedata, $lexer, $is_multipaste);
+				});
+			}
 		}
 
 		// TODO: move lexers json to dedicated URL
@@ -237,7 +255,7 @@ class File extends MY_Controller {
 		// much magic ({elapsed_time} and {memory_usage}).
 		// Direct echo puts us on the safe side.
 		echo $this->load->view($this->var->view_dir.'/html_header', $this->data, true);
-		$this->output_cache->render();
+		$output_cache->render();
 		echo $this->load->view($this->var->view_dir.'/html_footer', $this->data, true);
 	}
 
@@ -247,7 +265,7 @@ class File extends MY_Controller {
 		$lines_to_remove = 0;
 
 		$output .= '<div class="code content table">'."\n";
-		$output .= '<div class="highlight"><pre>'."\n";
+		$output .= '<div class="highlight"><code class="code-container">'."\n";
 
 		if ($lexer == "ascii") {
 			// TODO: use exec safe and catch exception
@@ -284,16 +302,20 @@ class File extends MY_Controller {
 				$anchor = "n-$anchor_id-$line_number";
 			}
 
-			// Be careful not to add superflous whitespace here (we are in a <pre>)
+			if ($line === "") {
+				$line = "<br>";
+			}
+
+			// Be careful not to add superflous whitespace here (we are in a <code>)
 			$output .= "<div class=\"table-row\">"
 							."<a href=\"#$anchor\" class=\"linenumber table-cell\">"
 								."<span class=\"anchor\" id=\"$anchor\"> </span>"
 							."</a>"
-							."<span class=\"line table-cell\">".$line."</span>\n";
-			$output .= "</div>";
+							."<span class=\"line table-cell\">".$line."</span><!--\n";
+			$output .= "--></div>";
 		}
 
-		$output .= "</pre></div>";
+		$output .= "</code></div>";
 		$output .= "</div>";
 
 		return array(
@@ -302,7 +324,7 @@ class File extends MY_Controller {
 		);
 	}
 
-	private function _highlight_file($filedata, $lexer, $is_multipaste)
+	private function _highlight_file($output_cache, $filedata, $lexer, $is_multipaste)
 	{
 		// highlight the file and cache the result, fall back to plain text if $lexer fails
 		foreach (array($lexer, "text") as $lexer) {
@@ -315,14 +337,16 @@ class File extends MY_Controller {
 					echo '<div class="code content table markdownrender">'."\n";
 					echo '<div class="table-row">'."\n";
 					echo '<div class="table-cell">'."\n";
-					// TODO: use exec safe and catch exception
-					$r = (new \libraries\ProcRunner(array(FCPATH.'scripts/Markdown.pl', $file)))->forbid_stderr()->exec();
-					echo $r['stdout'];
+
+					require_once(APPPATH."/third_party/parsedown/Parsedown.php");
+					$parsedown = new Parsedown();
+					echo $parsedown->text(file_get_contents($file));
+
 					echo '</div></div></div>';
 
 					return array(
 						"output" => ob_get_clean(),
-						"return_value" => $r["return_code"],
+						"return_value" => 0,
 					);
 				} else {
 					return get_instance()->_colorify($file, $lexer, $is_multipaste ? $filedata["id"] : false);
@@ -336,7 +360,7 @@ class File extends MY_Controller {
 				if ($lexer != "text") {
 					$message .= " Falling back to plain text.";
 				}
-				$this->output_cache->render_now(
+				$output_cache->render_now(
 					array("error_message" => "<p>$message</p>"),
 					"file/fragments/alert-wide"
 				);
@@ -351,38 +375,11 @@ class File extends MY_Controller {
 			'filedata' => $filedata,
 		));
 
-		$this->output_cache->render_now($data, $this->var->view_dir.'/html_paste_header');
-		$this->output_cache->render_now($highlit["output"]);
-		$this->output_cache->render_now($data, $this->var->view_dir.'/html_paste_footer');
+		$output_cache->render_now($data, $this->var->view_dir.'/html_paste_header');
+		$output_cache->render_now($highlit["output"]);
+		$output_cache->render_now($data, $this->var->view_dir.'/html_paste_footer');
 	}
 
-	private function _tooltip_for_image($filedata)
-	{
-		$filesize = format_bytes($filedata["filesize"]);
-		$file = $this->mfile->file($filedata["data_id"]);
-		$upload_date = date("r", $filedata["date"]);
-
-		$height = 0;
-		$width = 0;
-		try {
-			list($width, $height) = getimagesize($file);
-		} catch (\ErrorException $e) {
-			// likely unsupported filetype
-			// TODO: support more (using identify from imagemagick is likely slow :( )
-		}
-
-		$tooltip  = "${filedata["id"]} - $filesize<br>";
-		$tooltip .= "$upload_date<br>";
-
-
-		if ($height > 0 && $width > 0) {
-			$tooltip .= "${width}x${height} - ${filedata["mimetype"]}<br>";
-		} else {
-			$tooltip .= "${filedata["mimetype"]}<br>";
-		}
-
-		return $tooltip;
-	}
 
 	private function _display_info($id)
 	{
@@ -573,32 +570,6 @@ class File extends MY_Controller {
 		}
 	}
 
-	function client()
-	{
-		$this->data['title'] .= ' - Client';
-
-		if (file_exists(FCPATH.'data/client/latest')) {
-			$this->var->latest_client = trim(file_get_contents(FCPATH.'data/client/latest'));
-			$this->data['client_link'] = base_url().'data/client/fb-'.$this->var->latest_client.'.tar.gz';
-		} else {
-			$this->data['client_link'] = false;
-		}
-
-		if (preg_match('#^https?://(.*?)/.*$#', site_url(), $matches) === 1) {
-			$this->data["domain"] = $matches[1];
-		} else {
-			$this->data["domain"] = "unknown domain";
-		}
-
-		if (!is_cli_client()) {
-			$this->load->view('header', $this->data);
-		}
-		$this->load->view($this->var->view_dir.'/client', $this->data);
-		if (!is_cli_client()) {
-			$this->load->view('footer', $this->data);
-		}
-	}
-
 	function upload_form()
 	{
 		$this->data['title'] .= ' - Upload';
@@ -619,11 +590,15 @@ class File extends MY_Controller {
 			}
 		}
 
+		if (file_exists(FCPATH.'data/client/latest')) {
+			$this->var->latest_client = trim(file_get_contents(FCPATH.'data/client/latest'));
+			$this->data['client_link'] = base_url().'data/client/fb-'.$this->var->latest_client.'.tar.gz';
+		} else {
+			$this->data['client_link'] = false;
+		}
+
 		$this->load->view('header', $this->data);
 		$this->load->view($this->var->view_dir.'/upload_form', $this->data);
-		if (is_cli_client()) {
-			$this->client();
-		}
 		$this->load->view('footer', $this->data);
 	}
 
@@ -697,7 +672,7 @@ class File extends MY_Controller {
 				unset($query[$key]);
 				continue;
 			}
-			$query[$key]["tooltip"] = $this->_tooltip_for_image($item);
+			$query[$key]["tooltip"] = \service\files::tooltip($item);
 			$query[$key]["orientation"] = libraries\Image::get_exif_orientation($this->mfile->file($item["data_id"]));
 		}
 
@@ -706,6 +681,40 @@ class File extends MY_Controller {
 		$this->load->view('header', $this->data);
 		$this->load->view($this->var->view_dir.'/upload_history_thumbnails', $this->data);
 		$this->load->view('footer', $this->data);
+	}
+
+	public function handle_history_submit()
+	{
+		$this->muser->require_access("apikey");
+
+		$process = $this->input->post("process");
+
+		$dispatcher = [
+			"delete" => function() {
+				return $this->do_delete();
+			},
+			"multipaste" => function() {
+				return $this->_append_multipaste_queue();
+			},
+		];
+
+		if (isset($dispatcher[$process])) {
+			$dispatcher[$process]();
+		} else {
+			throw new \exceptions\UserInputException("file/handle_history_submit/invalid-process-value", "Value in process field not found in dispatch table");
+		}
+	}
+
+	private function _append_multipaste_queue()
+	{
+		$ids = $this->input->post("ids");
+		if ($ids === false) {
+			$ids = [];
+		}
+
+		$m = new \service\multipaste_queue();
+		$m->append($ids);
+		redirect("file/multipaste/queue");
 	}
 
 	function upload_history()
@@ -731,8 +740,27 @@ class File extends MY_Controller {
 
 		foreach ($history["multipaste_items"] as $key => $item) {
 			$size = 0;
+			$filenames = array();
+			$files = array();
+			$max_filenames = 10;
+
 			foreach ($item["items"] as $i) {
 				$size += $history["items"][$i["id"]]["filesize"];
+				$files[] = array(
+					"filename" => $history["items"][$i["id"]]['filename'],
+					"sort_order" => $i["sort_order"],
+				);
+			}
+
+			uasort($files, function ($a, $b) {
+				return $a['sort_order'] - $b['sort_order'];
+			});
+
+			$filenames = array_map(function ($a) {return $a['filename'];}, $files);
+
+			if (count($filenames) > $max_filenames) {
+				$filenames = array_slice($filenames, 0, $max_filenames);
+				$filenames[] = "...";
 			}
 
 			$history["items"][] = array(
@@ -742,6 +770,7 @@ class File extends MY_Controller {
 				"date" => $item["date"],
 				"hash" => "",
 				"filesize" => $size,
+				"preview_text" => implode("\n", $filenames),
 			);
 		}
 
@@ -757,6 +786,11 @@ class File extends MY_Controller {
 
 		foreach($history["items"] as $key => $item) {
 			$history["items"][$key]["filesize"] = format_bytes($item["filesize"]);
+
+			if (isset($item['preview_text'])) {
+				$history["items"][$key]["preview_text"] = htmlentities($item['preview_text']);
+			}
+
 			if (is_cli_client()) {
 				// Keep track of longest string to pad plaintext output correctly
 				foreach($fields as $length_key => $value) {
@@ -882,11 +916,12 @@ class File extends MY_Controller {
 
 		if (!empty($files)) {
 			$limits = $this->muser->get_upload_id_limits();
+			$userid = $this->muser->get_userid();
 			service\files::verify_uploaded_files($files);
 
 			foreach ($files as $key => $file) {
 				$id = $this->mfile->new_id($limits[0], $limits[1]);
-				service\files::add_uploaded_file($id, $file["tmp_name"], $file["name"]);
+				service\files::add_uploaded_file($userid, $id, $file["tmp_name"], $file["name"]);
 				$ids[] = $id;
 			}
 		}
@@ -911,6 +946,8 @@ class File extends MY_Controller {
 		}
 
 		$limits = $this->muser->get_upload_id_limits();
+		$userid = $this->muser->get_userid();
+
 		foreach ($contents as $key => $content) {
 			$filename = "stdin";
 			if (isset($filenames[$key]) && $filenames[$key] != "") {
@@ -918,7 +955,7 @@ class File extends MY_Controller {
 			}
 
 			$id = $this->mfile->new_id($limits[0], $limits[1]);
-			service\files::add_file_data($id, $content, $filename);
+			service\files::add_file_data($userid, $id, $content, $filename);
 			$ids[] = $id;
 		}
 
@@ -947,6 +984,8 @@ class File extends MY_Controller {
 		service\files::verify_uploaded_files($files);
 		$limits = $this->muser->get_upload_id_limits();
 
+		$userid = $this->muser->get_userid();
+
 		foreach ($files as $key => $file) {
 			$id = $this->mfile->new_id($limits[0], $limits[1]);
 
@@ -964,12 +1003,11 @@ class File extends MY_Controller {
 
 			$filename = trim($filename, "\r\n\0\t\x0B");
 
-			service\files::add_uploaded_file($id, $file["tmp_name"], $filename);
+			service\files::add_uploaded_file($userid, $id, $file["tmp_name"], $filename);
 			$ids[] = $id;
 		}
 
 		if ($multipaste !== false) {
-			$userid = $this->muser->get_userid();
 			$ids[] = \service\files::create_multipaste($ids, $userid, $limits)["url_id"];
 		}
 
@@ -1031,7 +1069,7 @@ class File extends MY_Controller {
 	// Removes old files
 	function cron()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 
 		$tarball_dir = $this->config->item("upload_path")."/special/multipaste-tarballs";
 		if (is_dir($tarball_dir)) {
@@ -1089,7 +1127,7 @@ class File extends MY_Controller {
 	/* remove files without database entries */
 	function clean_stale_files()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 
 		$upload_path = $this->config->item("upload_path");
 		$outer_dh = opendir($upload_path);
@@ -1143,7 +1181,7 @@ class File extends MY_Controller {
 
 	function nuke_id()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 
 		$id = $this->uri->segment(3);
 
@@ -1161,7 +1199,7 @@ class File extends MY_Controller {
 
 	function update_file_metadata()
 	{
-		if (!$this->input->is_cli_request()) return;
+		$this->_require_cli_request();
 
 		$chunk = 500;
 

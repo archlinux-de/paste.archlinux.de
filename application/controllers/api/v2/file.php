@@ -30,11 +30,12 @@ class file extends \controllers\api\api_controller {
 		\service\files::verify_uploaded_files($files);
 
 		$limits = $this->muser->get_upload_id_limits();
+		$userid = $this->muser->get_userid();
 		$urls = array();
 
 		foreach ($files as $file) {
 			$id = $this->mfile->new_id($limits[0], $limits[1]);
-			\service\files::add_uploaded_file($id, $file["tmp_name"], $file["name"]);
+			\service\files::add_uploaded_file($userid, $id, $file["tmp_name"], $file["name"]);
 			$ids[] = $id;
 			$urls[] = site_url($id).'/';
 		}
@@ -59,10 +60,14 @@ class file extends \controllers\api\api_controller {
 	{
 		$this->muser->require_access("apikey");
 		$history = \service\files::history($this->muser->get_userid());
-		# APIv1-cleanup: Remove this
 		foreach ($history['multipaste_items'] as $key => $item) {
+			# APIv1-cleanup: Remove this
 			unset($history['multipaste_items'][$key]['user_id']);
 			unset($history['multipaste_items'][$key]['multipaste_id']);
+
+			foreach ($item['items'] as $inner_key => $item) {
+				unset($history['multipaste_items'][$key]['items'][$inner_key]['sort_order']);
+			}
 		}
 		return $history;
 	}

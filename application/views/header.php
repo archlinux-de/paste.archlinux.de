@@ -13,10 +13,11 @@ if (is_cli_client() && !isset($force_full_html)) {
 	<meta name="description" content="">
 	<meta name="author" content="">
 
-	<link href="<?php echo link_with_mtime("/data/css/ui-lightness/jquery-ui-1.10.3.custom.min.css"); ?>" rel="stylesheet">
+	<link href="<?php echo link_with_mtime("/data/css/ui-lightness/jquery-ui.min.css"); ?>" rel="stylesheet">
 	<link href="<?php echo link_with_mtime("/data/css/bootstrap.min.css"); ?>" rel="stylesheet">
 	<link href="<?php echo link_with_mtime("/data/css/style.css"); ?>" rel="stylesheet">
 	<link href="<?php echo link_with_mtime("/data/css/colorbox.css"); ?>" rel="stylesheet">
+	<link href="<?php echo link_with_mtime("/data/css/asciinema-player.css"); ?>" rel="stylesheet">
 	<?php
 		if (file_exists(FCPATH."data/local/style.css")) {
 			echo '<link href="'.link_with_mtime("/data/local/style.css").'" rel="stylesheet">';
@@ -26,6 +27,7 @@ if (is_cli_client() && !isset($force_full_html)) {
 			echo '<link href="'.link_with_mtime("/data/local/favicon.png").'" rel="shortcut icon">';
 		}
 	?>
+	<script src="<?php echo link_with_mtime("/data/js/vendor/asciinema-player.js"); ?>"></script>
 	<script src="<?php echo link_with_mtime("/data/js/vendor/require.js"); ?>"></script>
 	<script type="text/javascript">
 		/* <![CDATA[ */
@@ -99,6 +101,9 @@ if (is_cli_client() && !isset($force_full_html)) {
 									<?php include "user/nav.php"; ?>
 								</ul>
 							</li>
+							<?php if (isset($show_multipaste_queue) && $show_multipaste_queue) {?>
+								<li class="btn-primary multipaste_button"><a href="<?php echo site_url("file/multipaste/queue"); ?>">Multipaste queue</a></li>
+							<?php } ?>
 						<?php } ?>
 					</ul>
 			</div>

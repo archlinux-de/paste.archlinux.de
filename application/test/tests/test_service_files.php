@@ -26,7 +26,9 @@ class test_service_files extends \test\Test {
 		$a = array();
 		try {
 			\service\files::verify_uploaded_files($a);
+			// @codeCoverageIgnoreStart
 			$this->t->fail("verify should error");
+			// @codeCoverageIgnoreEnd
 		} catch (\exceptions\UserInputException $e) {
 			$this->t->is($e->get_error_id(), "file/no-file", "verify should error");
 		}
@@ -66,7 +68,9 @@ class test_service_files extends \test\Test {
 
 		try {
 			\service\files::verify_uploaded_files($a);
+			// @codeCoverageIgnoreStart
 			$this->t->fail("verify should error");
+			// @codeCoverageIgnoreEnd
 		} catch (\exceptions\UserInputException $e) {
 			$data = $e->get_data();
 			$this->t->is($e->get_error_id(), "file/upload-verify", "verify should error");
@@ -78,6 +82,38 @@ class test_service_files extends \test\Test {
 				),
 			), $data, "expected data in exception");
 		}
+	}
+
+	public function test_ellipsize()
+	{
+		$a1 = "abc";
+		$a2 = "abc\nabc";
+		$a3 = "abc\nabc\nabc";
+		$a4 = "abc\nabc\nabc\nabc";
+
+		$this->t->is(\service\files::ellipsize($a1, 1, strlen($a1)),
+			$a1, "Trim 1 line to 1, no change");
+
+		$this->t->is(\service\files::ellipsize($a3, 3, strlen($a3)),
+			$a3, "Trim 3 lines to 3, no change");
+
+		$this->t->is(\service\files::ellipsize($a3, 5, strlen($a3)),
+			$a3, "Trim 3 lines to 5, no change");
+
+		$this->t->is(\service\files::ellipsize($a2, 1, strlen($a2)),
+			"$a1\n...", "Trim 2 lines to 1, drop one line");
+
+		$this->t->is(\service\files::ellipsize($a3, 2, strlen($a3)),
+			"$a2\n...", "Trim 3 lines to 2, drop one line");
+
+		$this->t->is(\service\files::ellipsize($a4, 2, strlen($a4)),
+			"$a2\n...", "Trim 4 lines to 2, drop 2 lines");
+
+		$this->t->is(\service\files::ellipsize($a3, 3, strlen($a3) + 1),
+			"$a2\n...", "Last line incomplete, drop one line");
+
+		$this->t->is(\service\files::ellipsize($a1, 5, strlen($a1) + 1),
+			"$a1 ...", "Single line incomplete, only add dots");
 	}
 
 

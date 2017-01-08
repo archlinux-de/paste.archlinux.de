@@ -16,7 +16,6 @@ class files {
 		$CI =& get_instance();
 		$items = array();
 
-		// TODO: thumbnail urls where available
 		$fields = array("files.id", "filename", "mimetype", "files.date", "hash", "filesize");
 		$query = $CI->db->select(implode(',', $fields))
 			->from('files')
@@ -71,10 +70,17 @@ class files {
 			->join("multipaste_file_map mfm", "m.multipaste_id = mfm.multipaste_id")
 			->join("files f", "f.id = mfm.file_url_id")
 			->where("m.user_id", $user)
+			->order_by("mfm.sort_order")
 			->get()->result_array();
 
+		$counter = 0;
+
 		foreach ($multipaste_items_query as $item) {
-			$multipaste_info[$item["url_id"]]["items"][$item["id"]] = array("id" => $item["id"]);
+			$multipaste_info[$item["url_id"]]["items"][$item["id"]] = array(
+				"id" => $item["id"],
+				// normalize sort_order value so we don't leak any information
+				"sort_order" => $counter++,
+			);
 		}
 
 		// No idea why, but this can/could happen so be more forgiving and clean up
@@ -88,20 +94,58 @@ class files {
 		return $multipaste_info;
 	}
 
-	static public function add_file_data($id, $content, $filename)
+	static public function add_file_data($userid, $id, $content, $filename)
 	{
 		$f = new \libraries\Tempfile();
 		$file = $f->get_file();
 		file_put_contents($file, $content);
-		self::add_file_callback($id, $file, $filename);
+		self::add_file_callback($userid, $id, $file, $filename);
 	}
 
-	static public function add_uploaded_file($id, $file, $filename)
+	/**
+	 * Ellipsize text to be at max $max_lines lines long. If the last line is
+	 * not complete (strlen($text) < $filesize), drop it so that every line of
+	 * the returned text is complete. If there is only one line, return that
+	 * line as is and add the ellipses at the end.
+	 *
+	 * @param text Text to add ellipses to
+	 * @param max_lines Number of lines the returned text should contain
+	 * @param filesize size of the original file where the text comes from
+	 * @return ellipsized text
+	 */
+	static public function ellipsize($text, $max_lines, $filesize)
 	{
-		self::add_file_callback($id, $file, $filename);
+		$lines = explode("\n", $text);
+		$orig_len = strlen($text);
+		$orig_linecount = count($lines);
+
+		if ($orig_linecount > 1) {
+			if ($orig_len < $filesize) {
+				// ensure we have a full line at the end
+				$lines = array_slice($lines, 0, -1);
+			}
+
+			if (count($lines) > $max_lines) {
+				$lines = array_slice($lines, 0, $max_lines);
+			}
+
+			if (count($lines) != $orig_linecount) {
+				// only add elipses when we drop at least one line
+				$lines[] = "...";
+			}
+		} elseif ($orig_len < $filesize) {
+			$lines[count($lines) - 1] .= " ...";
+		}
+
+		return implode("\n", $lines);
 	}
 
-	static private function add_file_callback($id, $new_file, $filename)
+	static public function add_uploaded_file($userid, $id, $file, $filename)
+	{
+		self::add_file_callback($userid, $id, $file, $filename);
+	}
+
+	static private function add_file_callback($userid, $id, $new_file, $filename)
 	{
 		$CI =& get_instance();
 		$hash = md5_file($new_file);
@@ -116,7 +160,6 @@ class files {
 			$data_id = implode("-", array($row['hash'], $row['id']));
 			$old_file = $CI->mfile->file($data_id);
 
-			// TODO: set $new_file
 			if (files_are_equal($old_file, $new_file)) {
 				$storage_id = $row["id"];
 				break;
@@ -148,7 +191,7 @@ class files {
 		rename($new_file, $tmpfile);
 		$dest->commit();
 
-		$CI->mfile->add_file($id, $filename, $storage_id);
+		$CI->mfile->add_file($userid, $id, $filename, $storage_id);
 	}
 
 	static public function verify_uploaded_files($files)
@@ -368,4 +411,32 @@ class files {
 
 		return true;
 	}
+
+	static public function tooltip(array $filedata)
+	{
+		$filesize = format_bytes($filedata["filesize"]);
+		$file = get_instance()->mfile->file($filedata["data_id"]);
+		$upload_date = date("r", $filedata["date"]);
+
+		$height = 0;
+		$width = 0;
+		try {
+			list($width, $height) = getimagesize($file);
+		} catch (\ErrorException $e) {
+			// likely unsupported filetype
+		}
+
+		$tooltip  = "${filedata["id"]} - $filesize<br>";
+		$tooltip .= "$upload_date<br>";
+
+
+		if ($height > 0 && $width > 0) {
+			$tooltip .= "${width}x${height} - ${filedata["mimetype"]}<br>";
+		} else {
+			$tooltip .= "${filedata["mimetype"]}<br>";
+		}
+
+		return $tooltip;
+	}
+
 }
