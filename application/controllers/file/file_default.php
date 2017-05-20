@@ -15,12 +15,6 @@ class File_default extends MY_Controller {
 
 		$this->load->model('mfile');
 		$this->load->model('mmultipaste');
-
-		if (is_cli_client()) {
-			$this->var->view_dir = "file_plaintext";
-		} else {
-			$this->var->view_dir = "file";
-		}
 	}
 
 	function index()
@@ -32,9 +26,7 @@ class File_default extends MY_Controller {
 
 		// Try to guess what the user would like to do.
 		$id = $this->uri->segment(1);
-		if (!empty($_FILES)) {
-			$this->do_upload();
-		} elseif (strpos($id, "m-") === 0 && $this->mmultipaste->id_exists($id)) {
+		if (strpos($id, "m-") === 0 && $this->mmultipaste->id_exists($id)) {
 			$this->_download();
 		} elseif ($id != "file" && $this->mfile->id_exists($id)) {
 			$this->_download();
@@ -84,15 +76,6 @@ class File_default extends MY_Controller {
 	{
 		$id = $this->uri->segment(1);
 		$lexer = urldecode($this->uri->segment(2));
-
-		if (isset($_GET["cli_deprecated"])) {
-			$this->data['alerts'][] = [
-				"type" => "warning",
-				"message" => "<b>WARNING:</b> This file has been uploaded with a client that uses an old and deprecated API.<br>
-				This API will be removed in the near future. Please update your client to one that uses a more recent API.<br>
-				If you are using fb-client, please upgrade to version 2.0 or newer. For other clients, please check with your client's developer."
-			];
-		}
 
 		$is_multipaste = false;
 		if ($this->mmultipaste->id_exists($id)) {
@@ -242,7 +225,8 @@ class File_default extends MY_Controller {
 				$output_cache->add(array("filedata" => $filedata), "file/fragments/asciinema-player");
 			} else {
 				$output_cache->add_function(function() use ($output_cache, $filedata, $lexer, $is_multipaste) {
-					$this->_highlight_file($output_cache, $filedata, $lexer, $is_multipaste);
+					$renderer = new \service\renderer($output_cache, $this->mfile, $this->data);
+					$renderer->highlight_file($filedata, $lexer, $is_multipaste);
 				});
 			}
 		}
@@ -254,132 +238,10 @@ class File_default extends MY_Controller {
 		// Don't use the output class/append_output because it does too
 		// much magic ({elapsed_time} and {memory_usage}).
 		// Direct echo puts us on the safe side.
-		echo $this->load->view($this->var->view_dir.'/html_header', $this->data, true);
+		echo $this->load->view('file/html_header', $this->data, true);
 		$output_cache->render();
-		echo $this->load->view($this->var->view_dir.'/html_footer', $this->data, true);
+		echo $this->load->view('file/html_footer', $this->data, true);
 	}
-
-	private function _colorify($file, $lexer, $anchor_id = false)
-	{
-		$output = "";
-		$lines_to_remove = 0;
-
-		$output .= '<div class="code content table">'."\n";
-		$output .= '<div class="highlight"><code class="code-container">'."\n";
-
-		if ($lexer == "ascii") {
-			// TODO: use exec safe and catch exception
-			$ret = (new \libraries\ProcRunner(array('ansi2html', '-p')))
-				->input(file_get_contents($file))
-				->forbid_stderr()
-				->exec();
-			// Last line is empty
-			$lines_to_remove = 1;
-		} else {
-			// TODO: use exec safe and catch exception
-			$ret = (new \libraries\ProcRunner(array('pygmentize', '-F', 'codetagify', '-O', 'encoding=guess,outencoding=utf8,stripnl=False', '-l', $lexer, '-f', 'html', $file)))
-				->exec();
-			// Last 2 items are "</pre></div>" and ""
-			$lines_to_remove = 2;
-		}
-
-
-		$buf = explode("\n", $ret["stdout"]);
-		$line_count = count($buf);
-
-		for ($i = 1; $i <= $lines_to_remove; $i++) {
-			unset($buf[$line_count - $i]);
-		}
-
-		foreach ($buf as $key => $line) {
-			$line_number = $key + 1;
-			if ($key == 0) {
-				$line = str_replace("<div class=\"highlight\"><pre>", "", $line);
-			}
-
-			$anchor = "n$line_number";
-			if ($anchor_id !== false) {
-				$anchor = "n-$anchor_id-$line_number";
-			}
-
-			if ($line === "") {
-				$line = "<br>";
-			}
-
-			// Be careful not to add superflous whitespace here (we are in a <code>)
-			$output .= "<div class=\"table-row\">"
-							."<a href=\"#$anchor\" class=\"linenumber table-cell\">"
-								."<span class=\"anchor\" id=\"$anchor\"> </span>"
-							."</a>"
-							."<span class=\"line table-cell\">".$line."</span><!--\n";
-			$output .= "--></div>";
-		}
-
-		$output .= "</code></div>";
-		$output .= "</div>";
-
-		return array(
-			"return_value" => $ret["return_code"],
-			"output" => $output
-		);
-	}
-
-	private function _highlight_file($output_cache, $filedata, $lexer, $is_multipaste)
-	{
-		// highlight the file and cache the result, fall back to plain text if $lexer fails
-		foreach (array($lexer, "text") as $lexer) {
-			$highlit = cache_function($filedata['data_id'].'_'.$lexer, 100,
-									  function() use ($filedata, $lexer, $is_multipaste) {
-				$file = $this->mfile->file($filedata['data_id']);
-				if ($lexer == "rmd") {
-					ob_start();
-
-					echo '<div class="code content table markdownrender">'."\n";
-					echo '<div class="table-row">'."\n";
-					echo '<div class="table-cell">'."\n";
-
-					require_once(APPPATH."/third_party/parsedown/Parsedown.php");
-					$parsedown = new Parsedown();
-					echo $parsedown->text(file_get_contents($file));
-
-					echo '</div></div></div>';
-
-					return array(
-						"output" => ob_get_clean(),
-						"return_value" => 0,
-					);
-				} else {
-					return get_instance()->_colorify($file, $lexer, $is_multipaste ? $filedata["id"] : false);
-				}
-			});
-
-			if ($highlit["return_value"] == 0) {
-				break;
-			} else {
-				$message = "Error trying to process the file. Either the lexer is unknown or something is broken.";
-				if ($lexer != "text") {
-					$message .= " Falling back to plain text.";
-				}
-				$output_cache->render_now(
-					array("error_message" => "<p>$message</p>"),
-					"file/fragments/alert-wide"
-				);
-			}
-		}
-
-		$data = array_merge($this->data, array(
-			'title' => htmlspecialchars($filedata['filename']),
-			'id' => $filedata["id"],
-			'current_highlight' => htmlspecialchars($lexer),
-			'timeout' => $this->mfile->get_timeout_string($filedata["id"]),
-			'filedata' => $filedata,
-		));
-
-		$output_cache->render_now($data, $this->var->view_dir.'/html_paste_header');
-		$output_cache->render_now($highlit["output"]);
-		$output_cache->render_now($data, $this->var->view_dir.'/html_paste_footer');
-	}
-
 
 	private function _display_info($id)
 	{
@@ -408,7 +270,7 @@ class File_default extends MY_Controller {
 			));
 
 			$this->load->view('header', $this->data);
-			$this->load->view($this->var->view_dir.'/multipaste_info', $data);
+			$this->load->view('file/multipaste_info', $data);
 			$this->load->view('footer', $this->data);
 			return;
 		} elseif ($this->mfile->id_exists($id)) {
@@ -418,7 +280,7 @@ class File_default extends MY_Controller {
 			$this->data['timeout'] = $this->mfile->get_timeout_string($id);
 
 			$this->load->view('header', $this->data);
-			$this->load->view($this->var->view_dir.'/file_info', $this->data);
+			$this->load->view('file/file_info', $this->data);
 			$this->load->view('footer', $this->data);
 		}
 	}
@@ -504,7 +366,7 @@ class File_default extends MY_Controller {
 		$this->data["title"] .= " - Not Found";
 		$this->output->set_status_header(404);
 		$this->load->view('header', $this->data);
-		$this->load->view($this->var->view_dir.'/non_existent', $this->data);
+		$this->load->view('file/non_existent', $this->data);
 		$this->load->view('footer', $this->data);
 	}
 
@@ -557,15 +419,11 @@ class File_default extends MY_Controller {
 			}
 		}
 
-		if (is_cli_client()) {
-			$redirect = false;
-		}
-
 		if ($redirect && count($ids) == 1) {
 			redirect($this->data['urls'][0], "location", 303);
 		} else {
 			$this->load->view('header', $this->data);
-			$this->load->view($this->var->view_dir.'/show_url', $this->data);
+			$this->load->view('file/show_url', $this->data);
 			$this->load->view('footer', $this->data);
 		}
 	}
@@ -598,7 +456,7 @@ class File_default extends MY_Controller {
 		}
 
 		$this->load->view('header', $this->data);
-		$this->load->view($this->var->view_dir.'/upload_form', $this->data);
+		$this->load->view('file/upload_form', $this->data);
 		$this->load->view('footer', $this->data);
 	}
 
@@ -679,7 +537,7 @@ class File_default extends MY_Controller {
 		$this->data["items"] = $query;
 
 		$this->load->view('header', $this->data);
-		$this->load->view($this->var->view_dir.'/upload_history_thumbnails', $this->data);
+		$this->load->view('file/upload_history_thumbnails', $this->data);
 		$this->load->view('footer', $this->data);
 	}
 
@@ -707,7 +565,7 @@ class File_default extends MY_Controller {
 
 	private function _append_multipaste_queue()
 	{
-		$ids = $this->input->post("ids");
+		$ids = $this->input->post_array("ids");
 		if ($ids === false) {
 			$ids = [];
 		}
@@ -774,14 +632,8 @@ class File_default extends MY_Controller {
 			);
 		}
 
-		$order = is_cli_client() ? "ASC" : "DESC";
-
-		uasort($history["items"], function($a, $b) use ($order) {
-			if ($order == "ASC") {
-				return $a["date"] - $b["date"];
-			} else {
+		uasort($history["items"], function($a, $b) {
 				return $b["date"] - $a["date"];
-			}
 		});
 
 		foreach($history["items"] as $key => $item) {
@@ -789,16 +641,6 @@ class File_default extends MY_Controller {
 
 			if (isset($item['preview_text'])) {
 				$history["items"][$key]["preview_text"] = htmlentities($item['preview_text']);
-			}
-
-			if (is_cli_client()) {
-				// Keep track of longest string to pad plaintext output correctly
-				foreach($fields as $length_key => $value) {
-					$len = mb_strlen($history["items"][$key][$length_key]);
-					if ($len > $lengths[$length_key]) {
-						$lengths[$length_key] = $len;
-					}
-				}
 			}
 		}
 
@@ -808,7 +650,7 @@ class File_default extends MY_Controller {
 		$this->data["total_size"] = format_bytes($history["total_size"]);
 
 		$this->load->view('header', $this->data);
-		$this->load->view($this->var->view_dir.'/upload_history', $this->data);
+		$this->load->view('file/upload_history', $this->data);
 		$this->load->view('footer', $this->data);
 	}
 
@@ -816,7 +658,7 @@ class File_default extends MY_Controller {
 	{
 		$this->muser->require_access("apikey");
 
-		$ids = $this->input->post("ids");
+		$ids = $this->input->post_array("ids");
 
 		$ret = \service\files::delete($ids);
 
@@ -825,7 +667,7 @@ class File_default extends MY_Controller {
 		$this->data["total_count"] = $ret["total_count"];
 
 		$this->load->view('header', $this->data);
-		$this->load->view($this->var->view_dir.'/deleted', $this->data);
+		$this->load->view('file/deleted', $this->data);
 		$this->load->view('footer', $this->data);
 	}
 
@@ -833,7 +675,7 @@ class File_default extends MY_Controller {
 	{
 		$this->muser->require_access("basic");
 
-		$ids = $this->input->post("ids");
+		$ids = $this->input->post_array("ids");
 		$userid = $this->muser->get_userid();
 		$limits = $this->muser->get_upload_id_limits();
 
@@ -842,46 +684,14 @@ class File_default extends MY_Controller {
 		return $this->_show_url(array($ret["url_id"]), false);
 	}
 
-	function delete()
-	{
-		$this->muser->require_access("apikey");
-
-		if (!is_cli_client()) {
-			throw new \exceptions\InsufficientPermissionsException("file/delete/unlisted-client", "Not a listed cli client, please use the history to delete uploads");
-		}
-
-		$id = $this->uri->segment(3);
-		$this->data["id"] = $id;
-		$userid = $this->muser->get_userid();
-
-		foreach (array($this->mfile, $this->mmultipaste) as $model) {
-			if ($model->id_exists($id)) {
-				if ($model->get_owner($id) !== $userid) {
-					echo "You don't own this file\n";
-					return;
-				}
-				if ($model->delete_id($id)) {
-					echo "$id has been deleted.\n";
-				} else {
-					echo "Deletion failed. Unknown error\n";
-				}
-				return;
-			}
-		}
-
-		throw new \exceptions\NotFoundException("file/delete/unknown-id", "Unknown ID '$id'.", array(
-			"id" => $id,
-		));
-	}
-
 	/**
 	 * Handle submissions from the web form (files and textareas).
 	 */
 	public function do_websubmit()
 	{
 		$files = getNormalizedFILES();
-		$contents = $this->input->post("content");
-		$filenames = $this->input->post("filename");
+		$contents = $this->input->post_array("content");
+		$filenames = $this->input->post_array("filename");
 
 		if (!is_array($filenames) || !is_array($contents)) {
 			throw new \exceptions\UserInputException('file/websubmit/invalid-form', 'The submitted POST form is invalid');
@@ -960,58 +770,6 @@ class File_default extends MY_Controller {
 		}
 
 		return $ids;
-	}
-
-	/**
-	 * Handles uploaded files
-	 * @Deprecated only used by the cli client
-	 */
-	function do_upload()
-	{
-		// stateful clients get a cookie to claim the ID later
-		// don't force them to log in just yet
-		if (!stateful_client()) {
-			$this->muser->require_access("basic");
-		}
-
-		$ids = array();
-
-		$extension = $this->input->post('extension');
-		$multipaste = $this->input->post('multipaste');
-
-		$files = getNormalizedFILES();
-
-		service\files::verify_uploaded_files($files);
-		$limits = $this->muser->get_upload_id_limits();
-
-		$userid = $this->muser->get_userid();
-
-		foreach ($files as $key => $file) {
-			$id = $this->mfile->new_id($limits[0], $limits[1]);
-
-			// work around a curl bug and allow the client to send the real filename base64 encoded
-			// TODO: this interface currently sets the same filename for every file if you use multiupload
-			$filename = $this->input->post("filename");
-			if ($filename !== false) {
-				$filename = base64_decode($filename, true);
-			}
-
-			// fall back if base64_decode failed
-			if ($filename === false) {
-				$filename = $file['name'];
-			}
-
-			$filename = trim($filename, "\r\n\0\t\x0B");
-
-			service\files::add_uploaded_file($userid, $id, $file["tmp_name"], $filename);
-			$ids[] = $id;
-		}
-
-		if ($multipaste !== false) {
-			$ids[] = \service\files::create_multipaste($ids, $userid, $limits)["url_id"];
-		}
-
-		$this->_show_url($ids, $extension);
 	}
 
 	function claim_id()

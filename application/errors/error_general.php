@@ -1,7 +1,7 @@
 <?php
 
 // fancy error page only works if we can load helpers
-if (class_exists("CI_Controller") && !isset($GLOBALS["is_error_page"])) {
+if (class_exists("CI_Controller") && !isset($GLOBALS["is_error_page"]) && isset(get_instance()->load)) {
 	if (!isset($title)) {
 		$title = "Error";
 	}
@@ -12,10 +12,6 @@ if (class_exists("CI_Controller") && !isset($GLOBALS["is_error_page"])) {
 	$CI->load->helper("url");
 
 	if ($CI->input->is_cli_request()) {
-		is_cli_client(true);
-	}
-
-	if (is_cli_client()) {
 		$message = str_replace("</p>", "</p>\n", $message);
 		$message = strip_tags($message);
 		echo "$heading: $message\n";

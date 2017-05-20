@@ -84,25 +84,18 @@ function mb_str_pad($ps_input, $pn_pad_length, $ps_pad_string = " ", $pn_pad_typ
 	return $ret;
 }
 
-function is_cli_client($override = null)
+function is_api_client($override = null)
 {
-	static $is_cli = null;
+	static $is_api = null;
 
 	if ($override !== null) {
-		$is_cli = $override;
+		$is_api = $override;
 	}
 
-	if ($is_cli === null) {
-		$is_cli = false;
-		// official client uses "fb-client/$version" as useragent
-		$clients = array("fb-client", "libcurl", "pyfb", "curl/");
-		foreach ($clients as $client) {
-			if (isset($_SERVER['HTTP_USER_AGENT']) && strpos($_SERVER['HTTP_USER_AGENT'], $client) !== false) {
-				$is_cli =  true;
-			}
-		}
+	if ($is_api === null) {
+		$is_api = false;
 	}
-	return $is_cli;
+	return $is_api;
 }
 
 function random_alphanum($min_length, $max_length = null)
@@ -275,7 +268,7 @@ function stateful_client()
 		return false;
 	}
 
-	if (is_cli_client()) {
+	if (is_api_client()) {
 		return false;
 	}
 
@@ -377,13 +370,17 @@ function files_are_equal($a, $b)
 # Source: http://php.net/manual/en/function.ini-get.php#96996
 function return_bytes($size_str)
 {
-    switch (substr ($size_str, -1))
-    {
-        case 'K': case 'k': return (int)$size_str * 1024;
-        case 'M': case 'm': return (int)$size_str * 1048576;
-        case 'G': case 'g': return (int)$size_str * 1073741824;
-        default: return $size_str;
-    }
+	switch (substr ($size_str, -1))
+	{
+		case 'K': case 'k': return (int)$size_str * 1024;
+		case 'M': case 'm': return (int)$size_str * 1048576;
+		case 'G': case 'g': return (int)$size_str * 1073741824;
+		default:
+		if (strlen($size_str) === strlen(intval($size_str))) {
+			return (int)$size_str;
+		}
+		throw new \exceptions\ApiException('filebin-helper/invalid-input-unit', "Input has invalid unit");
+	}
 }
 
 # vim: set noet:

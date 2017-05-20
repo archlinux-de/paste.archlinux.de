@@ -230,7 +230,7 @@ function guidv4()
 
 $testname = null;
 
-if (getenv("ENVIRONMENT") === "testsuite") {
+if (getenv("ENVIRONMENT") === "testsuite" && getenv("COLLECT_COVERAGE") == 1) {
 	if (function_exists("phpdbg_get_executable")) {
 		$testname = implode(' ', $argv);
 	} elseif (isset($_SERVER["HTTP_X_TESTSUITE_TESTNAME"])) {
@@ -253,16 +253,12 @@ if ($testname) {
 try {
 	require_once BASEPATH.'core/CodeIgniter.php';
 } catch (\exceptions\NotAuthenticatedException $e) {
-	if (is_cli_client()) {
-		show_error(nl2br(htmlspecialchars($e->__toString())), $e->get_http_error_code());
-	} else {
-		$CI =& get_instance();
-		$redirect_uri = $CI->uri->uri_string();
-		if (isset($CI->data["redirect_uri"])) {
-			$redirect_uri = $CI->data["redirect_uri"];
-		}
-		redirect("user/login?redirect_uri=".$redirect_uri);
+	$CI =& get_instance();
+	$redirect_uri = $CI->uri->uri_string();
+	if (isset($CI->data["redirect_uri"])) {
+		$redirect_uri = $CI->data["redirect_uri"];
 	}
+	redirect("user/login?redirect_uri=".$redirect_uri);
 } catch (\exceptions\PublicApiException $e) {
 	show_error(nl2br(htmlspecialchars($e->__toString())), $e->get_http_error_code());
 } finally {

@@ -1,5 +1,14 @@
 This file lists major, incompatible or otherwise important changes, you should look at it after every update.
 
+2.1.0 2017-05-14
+ - Autoformat single-line JSON file when rendering
+ - Improved error checking
+
+2.0.0 2017-03-03
+ - INCOMPATIBLE: Remove API v1 support
+ - INCOMPATIBLE: Remove plain text API
+ - Misc bug fixes and code improvements
+
 1.1.1 2016-11-05
  - Fix bug in install-git-hooks.sh
 
