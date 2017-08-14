@@ -65,6 +65,9 @@ class file extends \controllers\api\api_controller {
 				unset($history['multipaste_items'][$key]['items'][$inner_key]['sort_order']);
 			}
 		}
+
+		$history = ensure_json_keys_contain_objects($history, array("items", "multipaste_items"));
+
 		return $history;
 	}
 
@@ -72,7 +75,11 @@ class file extends \controllers\api\api_controller {
 	{
 		$this->muser->require_access("apikey");
 		$ids = $this->input->post_array("ids");
-		return \service\files::delete($ids);
+		$ret = \service\files::delete($ids);
+
+		$ret = ensure_json_keys_contain_objects($ret, array("errors", "deleted"));
+
+		return $ret;
 	}
 
 	public function create_multipaste()

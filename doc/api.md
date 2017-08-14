@@ -29,7 +29,7 @@ The version number follows the [semantic versioning guidelines](http://semver.or
 The requested version number must be of the format `vX[.X[.X]]` with X being
 a positive number. `v1` and `v1.0` will both be treated as `v1.0.0`.
 
-The most recent API version is `v2.1.0`.
+The most recent API version is `v2.1.1`.
 
 ### Compatibility
 
@@ -147,6 +147,8 @@ These are the most common errors that can be returned by any API call.
 
 | Version | Endpoint | Note |
 | ------- | -------- | ---- |
+| 2.1.1   | file/history | Empty objects (values of `items` and `multipaste_items`) are now always returned as {}. Before they were returned as [] |
+| 2.1.1   | file/delete | Empty objects (values of `errors` and `deleted`) are now always returned as {}. Before they were returned as [] |
 | 2.1.0   | file/history | Add ''item.thumbnail'' |
 | 2.0.0   | file/history | Add ''multipaste_item.date'' |
 | 2.0.0   | file/history | Remove private fields in response |
