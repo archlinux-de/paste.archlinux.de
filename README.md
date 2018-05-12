@@ -23,6 +23,10 @@ list](https://lists.server-speed.net/listinfo/filebin-general) for everything
 (general discussion, patches, announcements, ...). If need be more lists will be
 created at a later date.
 
+### IRC
+
+The official IRC channel is [irc.freenode.net/#filebin](irc://irc.freenode.net/#filebin).
+
 ### Patches
 
 Please submit patches (preferably git send-email) to the [filebin-general
@@ -39,10 +43,12 @@ You can also open a pull request on [GitHub](https://github.com/Bluewind/filebin
     * exif for thumbnail generation
     * phar for tarball creation
     * mysql, mysqli, pgsql, pdo_mysql (any of those) for database access
+	* xdebug for tests (not required on production)
 
 *  [composer](https://getcomposer.org/) for dependency management
 *  [pygmentize](http://pygments.org/) for code highlighting
 *  [ansi2html](http://pypi.python.org/pypi/ansi2html) for shell output rendering (ANSI color codes)
 *  [imagemagick](http://www.imagemagick.org/) for additional thumbnail generation
+	* ghostscript for PDF thumbnail creation via imagemagick
 *  [node.js](https://nodejs.org/) for javascript minification
 

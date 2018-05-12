@@ -53,7 +53,7 @@
 					<p><button type="submit" id="upload_button" class="btn btn-primary">Upload/Paste it!</button></p>
 					<p>
 						Uploads/pastes are <?php if ($upload_max_age > 0) {
-							echo "deleted after ".$upload_max_age." days";
+							echo "deleted after ".expiration_duration($upload_max_age);
 							if ($small_upload_size > 0) {
 								echo " unless they are smaller than ".format_bytes($small_upload_size);
 							}
@@ -162,7 +162,6 @@
 			<h4>Android</h4>
 				<p>
 					Development: <a href="https://github.com/sebastianrakel/fb-client-android">sebastianrakel/fb-client-android @ Github</a><br>
-					Google Playstore: <a href="https://play.google.com/store/apps/details?id=eu.devunit.fb_client">fb-client Android @ Google Play</a><br>
 					F-Droid Store: <a href="https://f-droid.org/repository/browse/?fdid=eu.devunit.fb_client">fb-client Android @ F-Droid</a><br>
 				</p>
 	</div>

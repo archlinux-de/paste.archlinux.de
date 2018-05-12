@@ -1,5 +1,24 @@
 {
-    "require-dev": {
-        "phpunit/php-code-coverage": "^4.0"
-    }
+	"description": "FileBin",
+	"name": "bluewind/filebin",
+	"type": "project",
+	"homepage": "https://github.com/Bluewind/filebin",
+	"license": "AGPLv3",
+	"support": {
+		"forum": "https://github.com/Bluewind/filebin",
+		"source": "https://github.com/Bluewind/filebin"
+	},
+	"require": {
+		"php": ">=5.5",
+		"ext-gd": "*",
+		"ext-exif": "*",
+		"ext-phar": "*"
+	},
+	"suggest": {
+		"paragonie/random_compat": "Provides better randomness in PHP 5.x"
+	},
+	"require-dev": {
+		"phpunit/php-code-coverage": "^4 || ^5",
+		"ext-xdebug": "*"
+	}
 }

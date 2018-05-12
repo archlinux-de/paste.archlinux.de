@@ -1,5 +1,31 @@
 <?php
 
+function expiration_duration($duration)
+{
+	$total = $duration;
+	$days = floor($total / 86400);
+	$total -= $days * 86400;
+	$hours = floor($total / 3600);
+	$total -= $hours * 3600;
+	$minutes = floor($total / 60);
+	$seconds = $total - $minutes * 60;
+	$times = array($days, $hours, $minutes, $seconds);
+	$suffixes = array(' day', ' hour', ' minute', ' second');
+	$expiration = array();
+
+	for ($i = 0; $i < count($suffixes); $i++) {
+		if ($times[$i] != 0) {
+			$duration = $times[$i].$suffixes[$i];
+			if ($times[$i] > 1) {
+				$duration .= "s";
+			}
+			array_push($expiration, $duration);
+		}
+	}
+
+	return join(", ", $expiration);
+}
+
 function format_bytes($size)
 {
 	$suffixes = array('B', 'KiB', 'MiB', 'GiB', 'TiB' , 'PiB' , 'EiB', 'ZiB', 'YiB');
@@ -390,6 +416,20 @@ function ensure_json_keys_contain_objects($data, $keys) {
 		}
 	}
 	return $data;
+}
+
+function output_cli_usage() {
+	echo "php index.php <controller> <function> [arguments]\n";
+	echo "\n";
+	echo "Functions:\n";
+	echo "  file cron               Cronjob\n";
+	echo "  file nuke_id <ID>       Nukes all IDs sharing the same hash\n";
+	echo "  user cron               Cronjob\n";
+	echo "  tools update_database   Update/Initialise the database\n";
+	echo "\n";
+	echo "Functions that shouldn't have to be run:\n";
+	echo "  file clean_stale_files     Remove files without database entries\n";
+	echo "  file update_file_metadata  Update filesize and mimetype in database\n";
 }
 
 # vim: set noet:

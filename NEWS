@@ -1,5 +1,37 @@
 This file lists major, incompatible or otherwise important changes, you should look at it after every update.
 
+3.0.3 2018-03-23
+ - Update codeiginiter to 3.1.8
+
+3.0.2 2018-02-06
+ - Ensure newly uploaded files do not exist before adding them to the DB
+ - Update file modification time instead of overwriting it with it's own data
+   when a file is uploaded multiple times
+ - Minor changes:
+   + Support values that are not multiples of one day for upload_max_age
+   + Add config settings for testsuite to example configs
+   + Include most php extension dependencies in composer.json
+   + Use dedicated, temporary upload directory for testsuite
+
+3.0.1 2017-12-02
+ - Document different database settings for postgres in example config
+
+3.0.0 2017-12-02
+
+ - This version ensures PHP 7.2 support by updating the underlying framework
+
+ - INCOMPATIBLE: You need to perform the following actions for this update:
+   - Changes in application/config/database.php
+     + Change "$active_record = TRUE" to "$query_builder = TRUE"
+     + Change the pconnect setting to FALSE
+	 + Change the stricton setting to TRUE
+	 + If you use mysql: (NOT for postgres installations)
+		 MYSQL Change the char_set setting to "utf8mb4"
+		 MYSQL Change the dbcollat setting to "utf8mb4_bin"
+   - Changes in application/config/config-local.php
+	 + Set base_url to your domain and, if used, installation directory.
+	 Example: $config['base_url'] = "https://paste.xinu.at/"
+
 2.1.3 2017-07-04
  - API 2.1.1: Fix incorrect types of empty objects returned by file/history and file/delete
 
