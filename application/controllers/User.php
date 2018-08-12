@@ -128,26 +128,20 @@ class User extends MY_Controller {
 
 		$userid = $this->muser->get_userid();
 
-		$invitations = $this->db->select('user')
-			->from('actions')
-			->where('user', $userid)
-			->where('action', 'invitation')
-			->count_all_results();
+		\service\user::create_invitation_key($userid);
 
-		if ($invitations + 1 > $this->config->item('max_invitation_keys')) {
-			throw new \exceptions\PublicApiException("user/invitation-limit", "You can't create more invitation keys at this time.");
-		}
+		redirect("user/invite");
+	}
 
-		$key = random_alphanum(12, 16);
+	function delete_invitation_key()
+	{
+		$this->duser->require_implemented("can_register_new_users");
+		$this->muser->require_access();
 
-		$this->db->set(array(
-				'key'    => $key,
-				'user'   => $userid,
-				'date'   => time(),
-				'action' => 'invitation'
-			))
-			->insert('actions');
+		$userid = $this->muser->get_userid();
+		$key = $this->input->post("key");
 
+		\service\user::delete_invitation_key($userid, $key);
 		redirect("user/invite");
 	}
 
@@ -702,4 +696,22 @@ class User extends MY_Controller {
 
 		echo "User added\n";
 	}
+
+	function delete_user()
+	{
+		$this->_require_cli_request();
+		$this->duser->require_implemented("can_delete_account");
+
+		echo "\nWARNING: Deleting a user will delete ALL their data permanently.\n\n";
+
+		$username = $this->_get_line_cli("Username", function($username) {
+			if (get_instance()->muser->username_exists($username)) {
+				return true;
+			}
+			return false;
+		});
+		$this->muser->delete_user_real($username);
+		echo "User removed\n";
+	}
+
 }

@@ -425,10 +425,14 @@ function output_cli_usage() {
 	echo "  file cron               Cronjob\n";
 	echo "  file nuke_id <ID>       Nukes all IDs sharing the same hash\n";
 	echo "  user cron               Cronjob\n";
+	echo "  user add_user           Add a user\n";
+	echo "  user delete_user        Delete a user including all their data\n";
 	echo "  tools update_database   Update/Initialise the database\n";
 	echo "\n";
 	echo "Functions that shouldn't have to be run:\n";
-	echo "  file clean_stale_files     Remove files without database entries\n";
+	echo "  file clean_stale_files     Remove files without database entries,\n";
+	echo "                             database entries without files and multipaste\n";
+	echo "                             tarballs that are no longer needed\n";
 	echo "  file update_file_metadata  Update filesize and mimetype in database\n";
 }
 

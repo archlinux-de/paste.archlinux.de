@@ -1,5 +1,19 @@
 This file lists major, incompatible or otherwise important changes, you should look at it after every update.
 
+3.2.0 2018-07-04
+ - Add `php index.php user delete_user` command for admin user deletion
+ - Document add_user admin command
+ - Update codeigniter to 3.1.9
+ - Document mbstring dependency
+
+3.1.1 2018-06-01
+ - Fix call to undefined method clean_multipaste_tarballs in cronjob
+
+3.1.0 2018-06-01
+ - Update asciinema player to support new cast format
+ - Allow users to delete invitation keys
+ - Add support to remove database entries without files to `php index.php file clean_stale_files`
+
 3.0.3 2018-03-23
  - Update codeiginiter to 3.1.8
 

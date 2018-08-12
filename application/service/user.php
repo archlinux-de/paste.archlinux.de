@@ -77,4 +77,52 @@ class user {
 			"apikeys" => $ret,
 		);
 	}
+
+	/**
+	 * Create an invitation key for a user
+	 * @param userid id of the user
+	 * @return key the created invitation key
+	 */
+	static public function create_invitation_key($userid) {
+		$CI =& get_instance();
+
+		$invitations = $CI->db->select('user')
+			->from('actions')
+			->where('user', $userid)
+			->where('action', 'invitation')
+			->count_all_results();
+
+		if ($invitations + 1 > $CI->config->item('max_invitation_keys')) {
+			throw new \exceptions\PublicApiException("user/invitation-limit", "You can't create more invitation keys at this time.");
+		}
+
+		$key = random_alphanum(12, 16);
+
+		$CI->db->set(array(
+				'key'    => $key,
+				'user'   => $userid,
+				'date'   => time(),
+				'action' => 'invitation'
+			))
+			->insert('actions');
+
+		return $key;
+	}
+
+	/**
+	 * Remove an invitation key belonging to a user
+	 * @param userid id of the user
+	 * @param key key to remove
+	 * @return number of removed keys
+	 */
+	static public function delete_invitation_key($userid, $key) {
+		$CI =& get_instance();
+
+		$CI->db
+			->where('key', $key)
+			->where('user', $userid)
+			->delete('actions');
+
+		return $CI->db->affected_rows();
+	}
 }

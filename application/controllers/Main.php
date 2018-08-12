@@ -832,23 +832,7 @@ class Main extends MY_Controller {
 	{
 		$this->_require_cli_request();
 
-		$tarball_dir = $this->config->item("upload_path")."/special/multipaste-tarballs";
-		if (is_dir($tarball_dir)) {
-			$tarball_cache_time = $this->config->item("tarball_cache_time");
-			$it = new RecursiveIteratorIterator(
-				new RecursiveDirectoryIterator($tarball_dir), RecursiveIteratorIterator::SELF_FIRST);
-
-			foreach ($it as $file) {
-				if ($file->isFile()) {
-					if ($file->getMTime() < time() - $tarball_cache_time) {
-						$lock = fopen($file, "r+");
-						flock($lock, LOCK_EX);
-						unlink($file);
-						flock($lock, LOCK_UN);
-					}
-				}
-			}
-		}
+		\service\files::clean_multipaste_tarballs();
 
 		$oldest_time = (time() - $this->config->item('upload_max_age'));
 		$oldest_session_time = (time() - $this->config->item("sess_expiration"));
@@ -890,54 +874,9 @@ class Main extends MY_Controller {
 	{
 		$this->_require_cli_request();
 
-		$upload_path = $this->config->item("upload_path");
-		$outer_dh = opendir($upload_path);
-
-		while (($dir = readdir($outer_dh)) !== false) {
-			if (!is_dir($upload_path."/".$dir) || $dir == ".." || $dir == "." || $dir == "special") {
-				continue;
-			}
-
-			$dh = opendir($upload_path."/".$dir);
-
-			$empty = true;
-
-			while (($file = readdir($dh)) !== false) {
-				if ($file == ".." || $file == ".") {
-					continue;
-				}
-
-				try {
-					list($hash, $storage_id) = explode("-", $file);
-				} catch (\ErrorException $e) {
-					unlink($upload_path."/".$dir."/".$file);
-					continue;
-				}
-
-				$query = $this->db->select('hash, id')
-					->from('file_storage')
-					->where('hash', $hash)
-					->where('id', $storage_id)
-					->limit(1)
-					->get()->row_array();
-
-				if (empty($query)) {
-					$this->mfile->delete_data_id($file);
-				} else {
-					$empty = false;
-				}
-			}
-
-			closedir($dh);
-
-			if ($empty && file_exists($upload_path."/".$dir)) {
-				rmdir($upload_path."/".$dir);
-			}
-		}
-		closedir($outer_dh);
-
-		// TODO: clean up special/multipaste-tarballs? cron() already expires
-		// after a rather short time, do we really need this here then?
+		\service\files::remove_files_missing_in_db();
+		\service\files::remove_files_missing_on_disk();
+		\service\files::clean_multipaste_tarballs();
 	}
 
 	function nuke_id()
