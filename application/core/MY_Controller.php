@@ -27,7 +27,6 @@ class MY_Controller extends CI_Controller {
 		$old_path = getenv("PATH");
 		putenv("PATH=$old_path:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin");
 
-		mb_internal_encoding('UTF-8');
 		$this->load->helper(array('form', 'filebin'));
 
 		if ($this->uri->segment(1) == "api") {
@@ -118,6 +117,11 @@ class MY_Controller extends CI_Controller {
 		// 2 functions for accessing config options, really?
 		$this->config->set_item('csrf_protection', true);
 		config_item("csrf_protection", true);
+
+		if ($this->uri->uri_string() == "file/multipaste/ajax_submit") {
+			$this->config->set_item('csrf_regenerate', false);
+		}
+
 		$this->security->__construct();
 		$this->security->csrf_verify();
 	}
