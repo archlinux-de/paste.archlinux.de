@@ -2,6 +2,12 @@ This file lists major, incompatible or otherwise important changes, you should l
 
 NEXT
 
+3.4.0 2019-05-21
+ - Allow data: URLs in Content-Security-Policy header for images and fonts
+
+3.3.2 2019-05-15
+ - Fix compatability with Pygments 2.4.0
+
 3.3.1 2019-01-28
  - Fix CSRF issue breaking multipaste creation page
  - Update codeigniter to 3.1.10
