@@ -14,7 +14,7 @@
 							 <div class="tab-pane active" id="text-upload-tab-1">
 								<div class="panel panel-default">
 									<div class="panel-heading">
-										<input type="text" name="filename[1]" class="form-control" placeholder="Filename/title (default: stdin)">
+										<input type="text" name="filename[1]" class="form-control" placeholder="Filename/title (default: stdin)" value="<?php if (isset($textarea_filename)) { echo htmlspecialchars($textarea_filename); } ?>">
 									</div>
 									<textarea name="content[1]" class="form-control text-upload" placeholder="Paste content"><?php
 										if (isset($textarea_content)) {
@@ -162,6 +162,12 @@
 
 			<h4>Android</h4>
 				<p>
+					Development: <a href="https://github.com/v4rakh/fbmobile">v4rakh/fbmobile @ Github</a><br>
+					Google Play: <a href="https://play.google.com/store/apps/details?id=de.varakh.fbmobile">FileBin @ Google Play</a><br>
+				</p>
+
+				<p>
+					Unmaintained Legacy Client:<br>
 					Development: <a href="https://github.com/sebastianrakel/fb-client-android">sebastianrakel/fb-client-android @ Github</a><br>
 					F-Droid Store: <a href="https://f-droid.org/repository/browse/?fdid=eu.devunit.fb_client">fb-client Android @ F-Droid</a><br>
 				</p>
